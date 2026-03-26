@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import userRoutes from "../src/modules/user/user.route";
+import userRoutes from "./modules/user/user.route";
 import { cors } from "hono/cors";
 
 const app = new Hono();
