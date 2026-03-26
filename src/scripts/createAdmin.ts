@@ -7,7 +7,7 @@ const MONGO_URI = process.env.MONGO_URI as string;
 
 interface AdminInput {
   name: string;
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -19,13 +19,13 @@ const createAdmin = async () => {
 
     // 🧠 input (hardcoded ya CLI se le sakte ho)
     const adminData: AdminInput = {
-      name: "Admin",
-      email: "admin@gmail.com",
-      password: "123456",
+      name: "SuperAdmin",
+      username: "superadmin",
+      password: "pavan@123",
     };
 
     // 🔍 check existing
-    const existing = await User.findOne({ email: adminData.email }).exec();
+    const existing = await User.findOne({ username: adminData.username }).exec();
 
     if (existing) {
       console.log("⚠️ Admin already exists");
@@ -38,15 +38,15 @@ const createAdmin = async () => {
     // 👑 create admin
     const admin = await User.create({
       name: adminData.name,
-      email: adminData.email,
+      username: adminData.username,
       password: hashedPassword,
-      role: "admin",
+      role: "superadmin",
     });
 
     console.log("🎉 Admin created successfully:");
     console.log({
       id: admin._id,
-      email: admin.email,
+      username: admin.username,
       role: admin.role,
     });
 

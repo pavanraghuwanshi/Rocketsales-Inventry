@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET as string;
 // ✅ Request Types
 interface RegisterBody {
   name: string;
-  email: string;
+  username: string;
   password: string;
   role?: "admin" | "hr" | "user";
 }
@@ -19,7 +19,7 @@ interface RegisterBody {
 
 // Login Types
 interface LoginBody {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -35,9 +35,9 @@ const getJwtSecret = (): string => {
 
 export const register = async (c: Context) => {
   const body = await c.req.json<RegisterBody>();
-  const { name, email, password, role } = body;
+  const { name, username, password, role } = body;
 
-  if (!name || !email || !password) {
+  if (!name || !username || !password) {
     return c.json(
       { message: "All fields are required" },
       400
@@ -50,7 +50,7 @@ export const register = async (c: Context) => {
     : "user";
 
   // check existing user
-  const existingUser = await User.findOne({ email }).exec();
+  const existingUser = await User.findOne({ username }).exec();
   if (existingUser) {
     return c.json(
       { message: "User already exists" },
@@ -62,7 +62,7 @@ export const register = async (c: Context) => {
 
   const user = await User.create({
     name,
-    email,
+    username,
     password: hashedPassword,
     role: safeRole,
   });
@@ -70,7 +70,7 @@ export const register = async (c: Context) => {
   return c.json(
     {
       id: user._id,
-      email: user.email,
+      username: user.username,
       role: user.role,
     },
     201
@@ -83,16 +83,16 @@ export const register = async (c: Context) => {
 
 // export const login = async (c: Context) => {
 //   const body = await c.req.json<LoginBody>();
-//   const { email, password } = body;
+//   const { username, password } = body;
 
-//   if (!email || !password) {
+//   if (!username || !password) {
 //     return c.json(
-//       { message: "Email and password required" },
+//       { message: "username and password required" },
 //       400
 //     );
 //   }
 
-//   const user = await User.findOne({ email }).exec();
+//   const user = await User.findOne({ username }).exec();
 
 //   if (!user) {
 //     return c.json(
@@ -123,7 +123,7 @@ export const register = async (c: Context) => {
 //     token,
 //     user: {
 //       id: user._id,
-//       email: user.email,
+//       username: user.username,
 //       role: user.role,
 //     },
 //   });
@@ -134,13 +134,13 @@ export const register = async (c: Context) => {
 
 export const login = async (c: Context) => {
   const body = await c.req.json<LoginBody>();
-  const { email, password } = body;
+  const { username, password } = body;
 
-  if (!email || !password) {
-    return c.json({ message: "Email and password required" }, 400);
+  if (!username || !password) {
+    return c.json({ message: "username and password required" }, 400);
   }
 
-  const user = await User.findOne({ email }).exec();
+  const user = await User.findOne({ username }).exec();
 
   if (!user) {
     return c.json({ message: "User not found" }, 404);
@@ -180,7 +180,7 @@ export const login = async (c: Context) => {
     message: "Login successful",
     user: {
       id: user._id,
-      email: user.email,
+      username: user.username,
       role: user.role,
     },
   });
