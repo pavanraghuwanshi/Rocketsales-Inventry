@@ -7,17 +7,10 @@ const app = new Hono();
 // ✅ Allow ALL CORS
 
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://goyal-enterprices.vercel.app",
-];
-
 app.use("*", cors({
-  origin: (origin) => {
-    if (!origin) return origin; // allow Postman / server calls
-    return allowedOrigins.includes(origin) ? origin : "";
-  },
-  credentials: true,
+  origin: "*",              // sab allow
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowHeaders: ["*"],
 }));
 
 app.get("/", (c) => {

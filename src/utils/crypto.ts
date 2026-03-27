@@ -1,17 +1,67 @@
-import { randomBytes, pbkdf2Sync } from "crypto";
+import crypto from "crypto";
 
-export const hashPassword = (password: string) => {
-  const salt = randomBytes(16).toString("hex");
+// 🔒 Config
+const ALGORITHM = "aes-256-cbc";
+const SECRET_KEY = process.env.CRYPTO_SECRET as string; // must be 32 chars
 
-  const hash = pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
+if (!SECRET_KEY || SECRET_KEY.length !== 32) {
+  throw new Error("CRYPTO_SECRET must be 32 characters long");
+}
 
-  return `${salt}:${hash}`;
+// 🔐 Types
+type EncryptedData = {
+  iv: string;
+  content: string;
 };
 
-export const comparePassword = (password: string, stored: string) => {
-  const [salt, originalHash] = stored.split(":");
+// ---------------- ENCRYPT ----------------
+export const encryptPassword = (text: string): EncryptedData => {
+  if (!text || typeof text !== "string") {
+    throw new Error("Invalid input for encryption");
+  }
 
-  const hash = pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
+  const iv = crypto.randomBytes(16);
 
-  return hash === originalHash;
+  const cipher = crypto.createCipheriv(
+    ALGORITHM,
+    Buffer.from(SECRET_KEY, "utf-8"), // ✅ explicitly utf-8
+    iv
+  );
+
+  // 🔥 CHANGE HERE (use Buffer)
+  const encrypted = Buffer.concat([
+    cipher.update(text, "utf8"),
+    cipher.final(),
+  ]);
+
+  return {
+    iv: iv.toString("hex"),
+    content: encrypted.toString("hex"),
+  };
+};
+
+// ---------------- DECRYPT ----------------
+export const decryptPassword = (data: EncryptedData): string => {
+  try {
+    if (!data?.iv || !data?.content) {
+      throw new Error("Invalid encrypted data");
+    }
+
+    const decipher = crypto.createDecipheriv(
+      ALGORITHM,
+      Buffer.from(SECRET_KEY, "utf-8"), // ✅ explicitly utf-8
+      Buffer.from(data.iv, "hex")
+    );
+
+    // 🔥 CHANGE HERE (use Buffer)
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(data.content, "hex")),
+      decipher.final(),
+    ]);
+
+    return decrypted.toString("utf8");
+  } catch (error) {
+    console.error("Decrypt error:", error);
+    throw new Error("Failed to decrypt password");
+  }
 };

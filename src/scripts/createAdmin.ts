@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { User } from "../modules/user/user.model";
+import { encryptPassword } from "../utils/crypto";
 
 // ✅ ENV
 const MONGO_URI = process.env.MONGO_URI as string;
@@ -33,7 +34,7 @@ const createAdmin = async () => {
     }
 
     // 🔐 hash password
-    const hashedPassword = await bcrypt.hash(adminData.password, 10);
+    const hashedPassword = await encryptPassword(adminData.password);
 
     // 👑 create admin
     const admin = await User.create({

@@ -1,7 +1,10 @@
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "../modules/auth/auth.type.ts";
 
-const JWT_SECRET = process.env.JWT_SECRET as string;
+// ✅ Proper return type
+type VerifyTokenResult =
+  | { user: JwtPayload }
+  | { error: string };
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -13,38 +16,43 @@ function getJwtSecret(): string {
   return secret;
 }
 
-// ✅ Verify Token
-export const verifyToken = async (req: Request) => {
+// ✅ Verify Token (FIXED)
+export const verifyToken = async (
+  req: Request
+): Promise<VerifyTokenResult> => {
 
-     const authHeader = req.headers.get("authorization");
+  const authHeader = req.headers.get("authorization");
 
-     if (!authHeader) {
-     return { error: "Unauthorized" };
-     }
+  if (!authHeader) {
+    return { error: "Unauthorized" };
+  }
 
-     const [bearer, token] = authHeader.split(" ");
+  const [bearer, token] = authHeader.split(" ");
 
-     if (bearer !== "Bearer" || !token) {
-     return { error: "Invalid token" };
-     }
+  if (bearer !== "Bearer" || !token) {
+    return { error: "Invalid token" };
+  }
 
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-     if (
-     typeof decoded !== "object" ||
-     !("id" in decoded) ||
-     !("role" in decoded)
-     ) {
-     return { error: "Invalid token payload" };
-     }
 
-const user: JwtPayload = decoded as JwtPayload;
+    if (
+      typeof decoded !== "object" ||
+      !("id" in decoded) ||
+      !("role" in decoded)
+    ) {
+      return { error: "Invalid token payload" };
+    }
+
+    // ✅ MAIN FIX — RETURN USER
+    return { user: decoded as JwtPayload };
+
   } catch (err) {
     return { error: "Invalid token" };
   }
 };
 
-// ✅ Role Guard
+// ✅ Role Guard (unchanged but clean)
 export const authorizeRoles = (roles: JwtPayload["role"][]) => {
   return (user: JwtPayload) => {
     if (!roles.includes(user.role)) {
