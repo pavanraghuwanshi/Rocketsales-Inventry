@@ -1,10 +1,11 @@
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "../modules/auth/auth.type.ts";
+import type { Context, Next } from "hono";
 
-// ✅ Proper return type
-type VerifyTokenResult =
-  | { user: JwtPayload }
-  | { error: string };
+
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
+
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -17,38 +18,28 @@ function getJwtSecret(): string {
 }
 
 // ✅ Verify Token (FIXED)
-export const verifyToken = async (
-  req: Request
-): Promise<VerifyTokenResult> => {
-
-  const authHeader = req.headers.get("authorization");
-
-  if (!authHeader) {
-    return { error: "Unauthorized" };
-  }
-
-  const [bearer, token] = authHeader.split(" ");
-
-  if (bearer !== "Bearer" || !token) {
-    return { error: "Invalid token" };
-  }
-
+export const verifyToken = async (c: Context, next: Next) => {
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
+    const authHeader = c.req.header("authorization");
 
-    if (
-      typeof decoded !== "object" ||
-      !("id" in decoded) ||
-      !("role" in decoded)
-    ) {
-      return { error: "Invalid token payload" };
+    if (!authHeader) {
+      return c.json({ message: "No token provided" }, 401);
     }
 
-    // ✅ MAIN FIX — RETURN USER
-    return { user: decoded as JwtPayload };
+    const token = authHeader.split(" ")[1];
 
-  } catch (err) {
-    return { error: "Invalid token" };
+    if (!token) {
+      return c.json({ message: "Invalid token format" }, 401);
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // ✅ store user in context (important)
+    c.set("user", decoded);
+
+    await next(); // 👉 MUST call next()
+  } catch (error) {
+    return c.json({ message: "Unauthorized" }, 401);
   }
 };
 

@@ -25,6 +25,7 @@
     "express": "^5.2.1",
     "hono": "^4.12.9",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.3.2"
+    "mongoose": "^9.3.2",
+    "zod": "^4.3.6"
   }
 }

@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import userRoutes from "./modules/user/user.route";
 import { cors } from "hono/cors";
+import brandRoutes from "./modules/brands/brand.route";
+import supplierRoutes from "./modules/supplier/supplier.route";
+import productRoutes from "./modules/product/product.route";
 
 const app = new Hono();
 
@@ -20,4 +23,18 @@ app.get("/", (c) => {
 
 // 👤 user routes
 app.route("/api/user", userRoutes);
+
+//   brand route
+app.route("/api/brands", brandRoutes);
+
+//   suppliers route
+app.route("/api/suppliers", supplierRoutes);
+
+//    product route
+app.route("/api/products", productRoutes);
+
+
+
+
+
 export default app;
