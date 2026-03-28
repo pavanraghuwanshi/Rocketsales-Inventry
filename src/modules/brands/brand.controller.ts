@@ -11,24 +11,34 @@ export const paginationSchema = z.object({
 // CREATE
 export const createBrand = async (c: Context) => {
   const body = await c.req.json();
+  const user = c.get("user");
 
-    const { name } = body;
+  const { name, adminId } = body;
 
   if (!name) {
     return c.json({ success: false, message: "Brand name is required" }, 400);
   }
 
-  // 🔍 Duplicate Check
-  const existingBrand = await Brand.findOne({ name: name.trim() });
+  let createdBy;
 
-  if (existingBrand) {
-    return c.json(
-      { success: false, message: "Brand already exists" },
-      409
-    );
+  if (user.role === "superadmin") {
+    // superadmin kisi admin ke liye create karega
+    createdBy = adminId || user._id;
+  } else {
+    // admin apne liye hi create karega
+    createdBy = user._id;
   }
 
-  const brand = await Brand.create(body);
+  const existingBrand = await Brand.findOne({ name: name.trim(), createdBy });
+
+  if (existingBrand) {
+    return c.json({ success: false, message: "Brand already exists" }, 409);
+  }
+
+  const brand = await Brand.create({
+    ...body,
+    createdBy,
+  });
 
   return c.json({ success: true, data: brand });
 };
@@ -36,6 +46,7 @@ export const createBrand = async (c: Context) => {
 // GET ALL
 export const getBrands = async (c: Context) => {
   try {
+    const user = c.get("user");
     const query = paginationSchema.parse(c.req.query());
 
     const page = parseInt(query.page || "1");
@@ -46,9 +57,16 @@ export const getBrands = async (c: Context) => {
       ? { name: { $regex: query.search, $options: "i" } }
       : {};
 
+    let roleFilter = {};
+
+    if (user.role === "admin") {
+      roleFilter = { createdBy: user._id };
+    }
+    // superadmin -> no filter (see all)
+
     const filter = {
-      isDeleted: false,
       ...searchFilter,
+      ...roleFilter,
     };
 
     const [brands, total] = await Promise.all([
@@ -59,7 +77,7 @@ export const getBrands = async (c: Context) => {
     return c.json({
       success: true,
       data: brands,
-      meta: {
+      pagination: {
         total,
         page,
         limit,
@@ -84,17 +102,50 @@ export const getBrand = async (c: Context) => {
 export const updateBrand = async (c: Context) => {
   const id = c.req.param("id");
   const body = await c.req.json();
+  const user = c.get("user"); // 🔐 logged in user
 
-  const brand = await Brand.findByIdAndUpdate(id, body, { new: true });
+  const brand = await Brand.findById(id);
 
-  return c.json({ success: true, data: brand });
+  if (!brand) {
+    return c.json({ success: false, message: "Brand not found" }, 404);
+  }
+
+  // 🚫 Unauthorized check
+  if (
+    user.role !== "superadmin" &&
+    brand.adminId.toString() !== user._id
+  ) {
+    return c.json({ success: false, message: "Unauthorized" }, 403);
+  }
+
+  const updatedBrand = await Brand.findByIdAndUpdate(id, body, {
+    returnDocument: "after",
+    runValidators: true,
+  });
+
+  return c.json({ success: true, data: updatedBrand });
 };
 
 // DELETE
 export const deleteBrand = async (c: Context) => {
   const id = c.req.param("id");
+  const user = c.get("user");
+
+  const brand = await Brand.findById(id);
+
+  if (!brand) {
+    return c.json({ success: false, message: "Brand not found" }, 404);
+  }
+
+  // 🚫 Unauthorized check
+  if (
+    user.role !== "superadmin" &&
+    brand.adminId.toString() !== user._id
+  ) {
+    return c.json({ success: false, message: "Unauthorized" }, 403);
+  }
 
   await Brand.findByIdAndDelete(id);
 
-  return c.json({ success: true, message: "Deleted" });
+  return c.json({ success: true, message: "Deleted successfully" });
 };
