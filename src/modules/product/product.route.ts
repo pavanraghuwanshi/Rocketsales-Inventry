@@ -6,8 +6,11 @@ import {
   updateProduct,
   deleteProduct,
 } from "./product.controller";
+import { verifyToken } from "../../middleware/auth.middleware";
 
 const productRoutes = new Hono();
+
+productRoutes.use("*", verifyToken);
 
 productRoutes.post("/", createProduct);
 productRoutes.get("/", getProducts);

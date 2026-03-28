@@ -6,8 +6,11 @@ import {
   updateSupplier,
   deleteSupplier,
 } from "./supplier.controller";
+import { verifyToken } from "../../middleware/auth.middleware";
 
 const supplierRoutes = new Hono();
+
+supplierRoutes.use("*", verifyToken);
 
 supplierRoutes.post("/", createSupplier);
 supplierRoutes.get("/", getSuppliers);

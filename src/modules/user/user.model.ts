@@ -11,8 +11,8 @@ export interface IUser extends Document {
   name: string;
   username: string;
   password: EncryptedData;
-  role: "admin" | "hr" | "user";
-  createdBy:Types.ObjectId;
+  role: "superadmin" | "admin" | "user";
+  adminId:mongoose.Types.ObjectId;
 }
 
 
@@ -33,6 +33,7 @@ const userSchema = new mongoose.Schema<IUser>(
       enum: ["superadmin", "admin", "user"],
       default: "user",
     },
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

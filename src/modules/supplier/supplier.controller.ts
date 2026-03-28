@@ -15,8 +15,21 @@ export const paginationSchema = z.object({
 export const createSupplier = async (c: Context) => {
   try {
     const body = await c.req.json();
+    const user = c.get("user");
 
-    const supplier = await Supplier.create(body);
+    const { adminId } = body;
+    let finalAdminId;
+
+    if (user.role === "superadmin") {
+      finalAdminId = adminId || user._id;
+    } else {
+      finalAdminId = user._id;
+    }
+
+    const supplier = await Supplier.create({
+      ...body,
+      adminId: finalAdminId,
+    });
 
     return c.json({ success: true, data: supplier });
   } catch (error: any) {
@@ -27,6 +40,7 @@ export const createSupplier = async (c: Context) => {
 // GET ALL
 export const getSuppliers = async (c: Context) => {
   try {
+    const user = c.get("user");
     const query = paginationSchema.parse(c.req.query());
 
     const page = parseInt(query.page || "1");
@@ -42,9 +56,16 @@ export const getSuppliers = async (c: Context) => {
         }
       : {};
 
+    let roleFilter = {};
+
+    if (user.role === "admin") {
+      roleFilter = { adminId: user._id };
+    }
+
     const filter = {
       isDeleted: false,
       ...searchFilter,
+      ...roleFilter,
     };
 
     const [suppliers, total] = await Promise.all([
@@ -89,14 +110,26 @@ export const updateSupplier = async (c: Context) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
+    const user = c.get("user"); // 🔐 logged in user
 
-    const supplier = await Supplier.findByIdAndUpdate(id, body, {
-      new: true,
-    });
+    const existingSupplier = await Supplier.findById(id);
 
-    if (!supplier) {
+    if (!existingSupplier) {
       return c.json({ success: false, message: "Supplier not found" }, 404);
     }
+
+    // 🚫 Unauthorized check
+    if (
+      user.role !== "superadmin" &&
+      existingSupplier.adminId?.toString() !== user._id
+    ) {
+      return c.json({ success: false, message: "Unauthorized" }, 403);
+    }
+
+    const supplier = await Supplier.findByIdAndUpdate(id, body, {
+    returnDocument: "after",
+    runValidators: true,
+  });
 
     return c.json({ success: true, data: supplier });
   } catch (error: any) {
@@ -108,12 +141,23 @@ export const updateSupplier = async (c: Context) => {
 export const deleteSupplier = async (c: Context) => {
   try {
     const id = c.req.param("id");
+    const user = c.get("user");
 
-    const supplier = await Supplier.findByIdAndDelete(id);
+    const existingSupplier = await Supplier.findById(id);
 
-    if (!supplier) {
+    if (!existingSupplier) {
       return c.json({ success: false, message: "Supplier not found" }, 404);
     }
+
+    // 🚫 Unauthorized check
+    if (
+      user.role !== "superadmin" &&
+      existingSupplier.adminId?.toString() !== user._id
+    ) {
+      return c.json({ success: false, message: "Unauthorized" }, 403);
+    }
+
+    await Supplier.findByIdAndDelete(id);
 
     return c.json({ success: true, message: "Supplier deleted" });
   } catch (error: any) {

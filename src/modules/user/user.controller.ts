@@ -1,10 +1,8 @@
 import type { Context } from "hono";
 import { User } from "../../modules/user/user.model.ts";
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "../auth/auth.type.ts";
 import { setCookie } from "hono/cookie";
-import { verifyToken } from "../../middleware/auth.middleware.ts";
 import type { Types } from "mongoose";
 import { decryptPassword, encryptPassword } from "../../utils/crypto.ts";
 
@@ -16,8 +14,8 @@ interface RegisterBody {
   name: string;
   username: string;
   password: string;
-  role?: "admin" | "hr" | "user";
-  createdBy:Types.ObjectId
+  role?: "superadmin" | "admin" | "user";
+  adminId?: Types.ObjectId;
 }
 
 
@@ -40,24 +38,19 @@ const getJwtSecret = (): string => {
 export const register = async (c: Context) => {
   try {
     const body = await c.req.json<RegisterBody>();
-    const { name, username, password, role, createdBy } = body;
+    const { name, username, password, role, adminId } = body;
 
     if (!name || !username || !password) {
       return c.json({ message: "All fields are required" }, 400);
     }
 
-    // 👉 get logged in user
-    const auth = await verifyToken(c.req.raw);
+    // 👉 get logged in user from local context populated by verifyToken
+    const loggedInUser = c.get("user");
 
-    if ("error" in auth) {
-      return c.json({ message: auth.error }, 401);
+
+    if (!loggedInUser) {
+      return c.json({ message: "Unauthorized user" }, 401);
     }
-
-    const loggedInUser = auth.user; // ⚠️ FIX (no .user)
-
-    // ❗ safe role
-    const safeRole =
-      role && ["admin", "hr", "user"].includes(role) ? role : "user";
 
     // 👉 check existing user
     const existingUser = await User.findOne({ username });
@@ -68,15 +61,27 @@ export const register = async (c: Context) => {
     // 👉 encrypt password
     const encryptedPassword = await encryptPassword(password);
 
-    // 🔥 ROLE BASED createdBy LOGIC
-    let finalCreatedBy;
+    // 🔥 HIERARCHY BASED ROLE AND adminId LOGIC
+    let safeRole = role || "user";
+    let finaladminId;
 
-    if (loggedInUser.role === "admin" && createdBy) {
-      // ✅ admin can assign anyone
-      finalCreatedBy = createdBy;
+    if (loggedInUser.role === "superadmin") {
+      // ✅ superadmin can create admin or user
+      if (!["admin", "user"].includes(safeRole)) {
+        return c.json({ message: "Superadmin can only create admin or user roles" }, 400);
+      }
+      // superadmin kisi aur ke liye (like admin) assigned bhi kar sakta hai
+      finaladminId = adminId || loggedInUser.id;
+    } else if (loggedInUser.role === "admin") {
+      // ✅ admin can only create user
+      if (safeRole !== "user") {
+        return c.json({ message: "Admins are only allowed to create users" }, 403);
+      }
+      // admin apne liye hi create karega
+      finaladminId = loggedInUser.id;
     } else {
-      // ✅ hr/user → always self
-      finalCreatedBy = loggedInUser.id;
+      // ✅ users/others cannot create accounts natively from this endpoint
+      return c.json({ message: "You do not have permission to create users" }, 403);
     }
 
 
@@ -86,7 +91,7 @@ export const register = async (c: Context) => {
       username,
       password: encryptedPassword,
       role: safeRole,
-      createdBy: finalCreatedBy,
+      adminId: finaladminId,
     });
 
     return c.json(
@@ -94,7 +99,7 @@ export const register = async (c: Context) => {
         id: user._id,
         username: user.username,
         role: user.role,
-        createdBy: user.createdBy, // ✅ clean
+        adminId: user.adminId, // ✅ clean
       },
       201
     );

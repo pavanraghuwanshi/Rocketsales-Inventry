@@ -5,6 +5,7 @@ export interface IProduct extends Document {
   price: number;
   brandId: mongoose.Types.ObjectId;
   supplierId: mongoose.Types.ObjectId;
+  adminId: mongoose.Types.ObjectId;
 }
 
 const productSchema = new Schema<IProduct>(
@@ -14,6 +15,7 @@ const productSchema = new Schema<IProduct>(
 
     brandId: { type: Schema.Types.ObjectId, ref: "Brand" },
     supplierId: { type: Schema.Types.ObjectId, ref: "Supplier" },
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

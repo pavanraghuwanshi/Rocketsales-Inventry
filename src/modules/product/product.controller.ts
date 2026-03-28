@@ -16,8 +16,21 @@ export const paginationSchema = z.object({
 export const createProduct = async (c: Context) => {
   try {
     const body = await c.req.json();
+    const user = c.get("user");
 
-    const product = await Product.create(body);
+    const { adminId } = body;
+    let finalAdminId;
+
+    if (user.role === "superadmin") {
+      finalAdminId = adminId || user._id;
+    } else {
+      finalAdminId = user._id;
+    }
+
+    const product = await Product.create({
+      ...body,
+      adminId: finalAdminId,
+    });
 
     return c.json({ success: true, data: product });
   } catch (error: any) {
@@ -28,6 +41,7 @@ export const createProduct = async (c: Context) => {
 // GET ALL (with populate 🔥)
 export const getProducts = async (c: Context) => {
   try {
+    const user = c.get("user");
     const query = paginationSchema.parse(c.req.query());
 
     const page = parseInt(query.page || "1");
@@ -38,9 +52,16 @@ export const getProducts = async (c: Context) => {
       ? { name: { $regex: query.search, $options: "i" } }
       : {};
 
+    let roleFilter = {};
+
+    if (user.role === "admin") {
+      roleFilter = { adminId: user._id };
+    }
+
     const filter = {
       isDeleted: false,
       ...searchFilter,
+      ...roleFilter,
     };
 
     const [products, total] = await Promise.all([
@@ -92,14 +113,25 @@ export const updateProduct = async (c: Context) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
+    const user = c.get("user"); // 🔐 logged in user
+
+    const existingProduct = await Product.findById(id);
+
+    if (!existingProduct) {
+      return c.json({ success: false, message: "Product not found" }, 404);
+    }
+
+    // 🚫 Unauthorized check
+    if (
+      user.role !== "superadmin" &&
+      existingProduct.adminId?.toString() !== user._id
+    ) {
+      return c.json({ success: false, message: "Unauthorized" }, 403);
+    }
 
     const product = await Product.findByIdAndUpdate(id, body, {
       new: true,
     });
-
-    if (!product) {
-      return c.json({ success: false, message: "Product not found" }, 404);
-    }
 
     return c.json({ success: true, data: product });
   } catch (error: any) {
@@ -111,12 +143,23 @@ export const updateProduct = async (c: Context) => {
 export const deleteProduct = async (c: Context) => {
   try {
     const id = c.req.param("id");
+    const user = c.get("user");
 
-    const product = await Product.findByIdAndDelete(id);
+    const existingProduct = await Product.findById(id);
 
-    if (!product) {
+    if (!existingProduct) {
       return c.json({ success: false, message: "Product not found" }, 404);
     }
+
+    // 🚫 Unauthorized check
+    if (
+      user.role !== "superadmin" &&
+      existingProduct.adminId?.toString() !== user._id
+    ) {
+      return c.json({ success: false, message: "Unauthorized" }, 403);
+    }
+
+    await Product.findByIdAndDelete(id);
 
     return c.json({ success: true, message: "Product deleted" });
   } catch (error: any) {
