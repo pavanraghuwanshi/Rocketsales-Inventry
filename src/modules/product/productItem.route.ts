@@ -7,7 +7,7 @@ const productItemRoutes = new Hono();
 
 productItemRoutes.use("*", verifyToken);
 
-productItemRoutes.post("/",   verifyToken,      addProductItems);
+productItemRoutes.post("/", addProductItems);
 
 
 export default productItemRoutes;
