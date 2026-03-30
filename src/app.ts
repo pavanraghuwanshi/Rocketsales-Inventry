@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import userRoutes from "./modules/user/user.route";
 import { cors } from "hono/cors";
 import brandRoutes from "./modules/brands/brand.route";
+import categoryRoutes from "./modules/category/category.route";
 import supplierRoutes from "./modules/supplier/supplier.route";
 import productRoutes from "./modules/product/product.route";
 
@@ -24,8 +25,12 @@ app.get("/", (c) => {
 // 👤 user routes
 app.route("/api/user", userRoutes);
 
+
 //   brand route
 app.route("/api/brands", brandRoutes);
+
+//   category route
+app.route("/api/categories", categoryRoutes);
 
 //   suppliers route
 app.route("/api/suppliers", supplierRoutes);

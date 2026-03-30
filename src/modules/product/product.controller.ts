@@ -18,9 +18,12 @@ export const createProduct = async (c: Context) => {
     const body = await c.req.json();
     const user = c.get("user");
 
-    const { adminId } = body;
-    let finalAdminId;
+    const { adminId, categoryId } = body;
+    if (!categoryId) {
+      return c.json({ success: false, message: "categoryId is required" }, 400);
+    }
 
+    let finalAdminId;
     if (user.role === "superadmin") {
       finalAdminId = adminId || user._id;
     } else {
@@ -30,6 +33,7 @@ export const createProduct = async (c: Context) => {
     const product = await Product.create({
       ...body,
       adminId: finalAdminId,
+      categoryId,
     });
 
     return c.json({ success: true, data: product });
@@ -68,6 +72,7 @@ export const getProducts = async (c: Context) => {
       Product.find(filter)
         .populate("brandId", "name")
         .populate("supplierId", "name email")
+        .populate("categoryId", "name")
         .skip(skip)
         .limit(limit),
 
@@ -96,7 +101,8 @@ export const getProduct = async (c: Context) => {
 
     const product = await Product.findById(id)
       .populate("brandId")
-      .populate("supplierId");
+      .populate("supplierId")
+      .populate("categoryId");
 
     if (!product) {
       return c.json({ success: false, message: "Product not found" }, 404);
