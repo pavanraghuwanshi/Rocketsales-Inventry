@@ -2,6 +2,9 @@ import type { Context } from "hono";
 
 import Warehouse from "./warehouse.model";
 import Rack from "./rack.model";
+import ProductItem from "../product/productItem.model";
+import mongoose from "mongoose";
+
 
 export const createWarehouse = async (c: Context) => {
   try {
@@ -135,41 +138,131 @@ export const getWarehouses = async (c: Context) => {
     let adminId = c.req.query("adminId");
     const search = c.req.query("search") || "";
 
-    // 👉 Role logic
+    // Role logic
     if (user.role === "admin") {
       adminId = user._id;
     }
 
-    // 👉 Pagination
+    // Pagination
     const page = parseInt(c.req.query("page") || "1");
     const limit = parseInt(c.req.query("limit") || "10");
     const skip = (page - 1) * limit;
 
-    // 👉 Filter
-    let filter: any = {};
+    // Filter
+    const filter: any = {};
+    if (adminId) filter.adminId = new mongoose.Types.ObjectId(adminId);
+    if (search) filter.name = { $regex: search, $options: "i" };
 
-    if (adminId) {
-      filter.adminId = adminId;
-    }
+    // Get warehouses with pagination
+    const warehouses = await Warehouse.find(filter)
+      .populate("adminId", "name")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    // 👉 Search (case-insensitive)
-    if (search) {
-      filter.name = { $regex: search, $options: "i" };
-    }
+    const warehouseIds = warehouses.map(w => w._id);
 
-    const [warehouses, total] = await Promise.all([
-      Warehouse.find(filter)
-        .populate("adminId","name")
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 }),
-
-      Warehouse.countDocuments(filter),
+    // Count racks per warehouse
+    const racksCount = await Rack.aggregate([
+      { $match: { warehouseId: { $in: warehouseIds } } },
+      { $group: { _id: "$warehouseId", totalRacks: { $sum: 1 } } },
     ]);
+
+    // Count items per warehouse (via racks)
+    const itemsCount = await ProductItem.aggregate([
+      { $match: { warehouseId: { $in: warehouseIds } } },
+      { $group: { _id: "$warehouseId", totalItems: { $sum: 1 } } },
+    ]);
+
+    // Merge counts into warehouses
+    const data = warehouses.map(w => {
+      const rackData = racksCount.find(r => r._id.toString() === w._id.toString());
+      const itemData = itemsCount.find(i => i._id.toString() === w._id.toString());
+      return {
+        ...w.toObject(),
+        totalRacks: rackData?.totalRacks || 0,
+        totalItems: itemData?.totalItems || 0,
+      };
+    });
+
+    const total = await Warehouse.countDocuments(filter);
 
     return c.json({
       success: true,
-      data: warehouses,
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+
+
+
+// Get rack-wise items summary with pagination & search
+export const getRackItemsSummary = async (c: Context) => {
+  try {
+    const warehouseId = c.req.query("warehouseId");
+    if (!warehouseId) {
+      return c.json({ success: false, message: "warehouseId is required" }, 400);
+    }
+
+    const search = c.req.query("search") || "";
+
+    // Pagination
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    // Fetch racks of this warehouse with search
+    const filter: any = { warehouseId };
+    if (search) filter.name = { $regex: search, $options: "i" };
+
+    const [racks, total] = await Promise.all([
+      Rack.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Rack.countDocuments(filter),
+    ]);
+
+    const rackIds = racks.map(r => r._id);
+
+    // Aggregate productitems counts per rack by status
+    const itemsSummary = await ProductItem.aggregate([
+      { $match: { rackId: { $in: rackIds } } },
+      {
+        $group: {
+          _id: "$rackId",
+          available: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
+          sold: { $sum: { $cond: [{ $eq: ["$status", "sold"] }, 1, 0] } },
+          damaged: { $sum: { $cond: [{ $eq: ["$status", "damaged"] }, 1, 0] } },
+          totalItems: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Merge counts into racks
+    const data = racks.map(r => {
+      const summary = itemsSummary.find(i => i._id.toString() === r._id.toString());
+      return {
+        _id: r._id,
+        name: r.name,
+        totalItems: summary?.totalItems || 0,
+        available: summary?.available || 0,
+        sold: summary?.sold || 0,
+        damaged: summary?.damaged || 0,
+      };
+    });
+
+    return c.json({
+      success: true,
+      warehouseId,
+      data,
       pagination: {
         total,
         page,
