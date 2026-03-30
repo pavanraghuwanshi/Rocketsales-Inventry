@@ -142,7 +142,15 @@ export const getProductItemsByRack = async (c: Context) => {
 
     // Fetch items with relational data
     const items = await ProductItem.find(query)
-      .populate("productId", "name skuNumber price brandId supplierId categoryId") // populate product fields
+    .populate({
+        path: "productId",
+        select: "name skuNumber price brandId supplierId categoryId",
+        populate: [
+          { path: "brandId", select: "name" },       // populate brand
+          { path: "supplierId", select: "name" },    // populate supplier
+          { path: "categoryId", select: "name" },    // populate category
+        ],
+      })
       .populate("warehouseId", "name location") // populate warehouse fields
       .populate("rackId", "name capacity") // populate rack fields
       .sort({ createdAt: -1 })
