@@ -243,8 +243,7 @@ export const getRackItemsSummary = async (c: Context) => {
       {
         $group: {
           _id: "$rackId",
-          available: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
-          totalItems: { $sum: 1 },
+          totalItems: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
         },
       },
     ]);
