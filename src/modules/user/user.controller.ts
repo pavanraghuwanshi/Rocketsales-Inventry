@@ -110,6 +110,67 @@ export const register = async (c: Context) => {
 };
 
 
+//  Get All Users
+export const getAllUsers = async (c: Context) => {
+  try {
+    const loggedInUser = c.get("user");
+
+    if (!loggedInUser) {
+      return c.json({ message: "Unauthorized user" }, 401);
+    }
+
+    // 👉 query params for pagination and search
+    const { page = "1", limit = "10", search = "" } = c.req.query();
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+
+    // 👉 build search filter
+    const searchFilter: any = {};
+    if (search) {
+      // search by name or username (case-insensitive)
+      searchFilter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { username: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // 👉 filter based on hierarchy
+    if (loggedInUser.role === "admin") {
+      // admin sees only users under their adminId
+      searchFilter.adminId = loggedInUser.id;
+    } else if (loggedInUser.role === "superadmin") {
+       searchFilter.role = { $ne: "superadmin" };
+      // superadmin sees all users
+    } else {
+      return c.json({ message: "You do not have permission to view users" }, 403);
+    }
+
+    // 👉 get total count for pagination
+    const total = await User.countDocuments(searchFilter);
+
+    // 👉 fetch users with pagination
+    const users = await User.find(searchFilter)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .select("name username role adminId") // ✅ only expose needed fields
+      .sort({ createdAt: -1 }); // latest first
+
+    return c.json({
+      success: true,
+      data: users,
+      pagination: {
+        total,
+        page:pageNum,
+        limit:limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Get All Users Error:", error);
+    return c.json({ message: "Internal Server Error" }, 500);
+  }
+};
+
 
 // ✅ Login
 
