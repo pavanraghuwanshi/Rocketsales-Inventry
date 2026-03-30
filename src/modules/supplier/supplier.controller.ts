@@ -11,20 +11,18 @@ export const paginationSchema = z.object({
   search: z.string().optional(),
 });
 
+const getAdminId = (user: any, bodyAdminId?: string) => {
+  if (user.role === "admin") return user.id;
+  return bodyAdminId || user._id;
+};
+
 // CREATE
 export const createSupplier = async (c: Context) => {
   try {
     const body = await c.req.json();
     const user = c.get("user");
 
-    const { adminId } = body;
-    let finalAdminId;
-
-    if (user.role === "superadmin") {
-      finalAdminId = adminId || user._id;
-    } else {
-      finalAdminId = user._id;
-    }
+    const finalAdminId = getAdminId(user, body.adminId);
 
     const supplier = await Supplier.create({
       ...body,
@@ -56,27 +54,30 @@ export const getSuppliers = async (c: Context) => {
         }
       : {};
 
-    let roleFilter = {};
+    let adminId = c.req.query("adminId");
 
+    // 👉 Same logic everywhere
     if (user.role === "admin") {
-      roleFilter = { adminId: user._id };
+      adminId = user._id;
     }
 
-    const filter = {
-      isDeleted: false,
+    const filter: any = {
       ...searchFilter,
-      ...roleFilter,
     };
 
+    if (adminId) {
+      filter.adminId = adminId;
+    }
+
     const [suppliers, total] = await Promise.all([
-      Supplier.find(filter).skip(skip).limit(limit),
+      Supplier.find(filter).populate("adminId", "name").skip(skip).limit(limit).sort({ createdAt: -1 }),
       Supplier.countDocuments(filter),
     ]);
 
     return c.json({
       success: true,
       data: suppliers,
-      meta: {
+      pagination: {
         total,
         page,
         limit,
@@ -92,8 +93,18 @@ export const getSuppliers = async (c: Context) => {
 export const getSupplier = async (c: Context) => {
   try {
     const id = c.req.param("id");
+    const user = c.get("user");
 
-    const supplier = await Supplier.findById(id);
+    let adminId: any = undefined;
+
+    if (user.role === "admin") {
+      adminId = user._id;
+    }
+
+    const supplier = await Supplier.findOne({
+      _id: id,
+      ...(adminId && { adminId }),
+    });
 
     if (!supplier) {
       return c.json({ success: false, message: "Supplier not found" }, 404);
@@ -110,26 +121,29 @@ export const updateSupplier = async (c: Context) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
-    const user = c.get("user"); // 🔐 logged in user
+    const user = c.get("user");
 
-    const existingSupplier = await Supplier.findById(id);
+    let adminId: any = undefined;
 
-    if (!existingSupplier) {
-      return c.json({ success: false, message: "Supplier not found" }, 404);
+    if (user.role === "admin") {
+      adminId = user._id;
     }
 
-    // 🚫 Unauthorized check
-    if (
-      user.role !== "superadmin" &&
-      existingSupplier.adminId?.toString() !== user._id
-    ) {
-      return c.json({ success: false, message: "Unauthorized" }, 403);
-    }
+    const supplier = await Supplier.findOneAndUpdate(
+      {
+        _id: id,
+        ...(adminId && { adminId }),
+      },
+      body,
+      {
+        returnDocument: "after",
+        runValidators: true,
+      }
+    );
 
-    const supplier = await Supplier.findByIdAndUpdate(id, body, {
-    returnDocument: "after",
-    runValidators: true,
-  });
+    if (!supplier) {
+      return c.json({ success: false, message: "Supplier not found or unauthorized" }, 404);
+    }
 
     return c.json({ success: true, data: supplier });
   } catch (error: any) {
