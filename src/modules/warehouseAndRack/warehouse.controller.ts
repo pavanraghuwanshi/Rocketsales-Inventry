@@ -170,7 +170,12 @@ export const getWarehouses = async (c: Context) => {
 
     // Count items per warehouse (via racks)
     const itemsCount = await ProductItem.aggregate([
-      { $match: { warehouseId: { $in: warehouseIds } } },
+          {
+     $match: {
+          warehouseId: { $in: warehouseIds },
+          status: "available", // ✅ only available items
+     },
+     },
       { $group: { _id: "$warehouseId", totalItems: { $sum: 1 } } },
     ]);
 
@@ -239,8 +244,6 @@ export const getRackItemsSummary = async (c: Context) => {
         $group: {
           _id: "$rackId",
           available: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
-          sold: { $sum: { $cond: [{ $eq: ["$status", "sold"] }, 1, 0] } },
-          damaged: { $sum: { $cond: [{ $eq: ["$status", "damaged"] }, 1, 0] } },
           totalItems: { $sum: 1 },
         },
       },
@@ -254,8 +257,7 @@ export const getRackItemsSummary = async (c: Context) => {
         name: r.name,
         totalItems: summary?.totalItems || 0,
         available: summary?.available || 0,
-        sold: summary?.sold || 0,
-        damaged: summary?.damaged || 0,
+
       };
     });
 
