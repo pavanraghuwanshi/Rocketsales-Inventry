@@ -176,8 +176,6 @@ export const createProduct = async (c: Context) => {
 };
 
 
-
-
 // GET ALL (with populate 🔥)
 
 export const getProducts = async (c: Context) => {

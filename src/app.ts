@@ -6,6 +6,7 @@ import categoryRoutes from "./modules/category/category.route";
 import supplierRoutes from "./modules/supplier/supplier.route";
 import productRoutes from "./modules/product/product.route";
 import warehouseRoutes from "./modules/warehouseAndRack/warehouse.route";
+import productItemRoutes from "./modules/product/productItem.route";
 
 const app = new Hono();
 
@@ -43,6 +44,7 @@ app.route("/api/warehouses", warehouseRoutes);
 
 //    product route
 app.route("/api/products", productRoutes);
+app.route("/api/product-items", productItemRoutes);
 
 
 
