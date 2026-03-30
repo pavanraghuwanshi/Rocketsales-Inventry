@@ -275,3 +275,91 @@ export const getRackItemsSummary = async (c: Context) => {
     return c.json({ success: false, message: error.message }, 500);
   }
 };
+
+
+
+//   WareHouse Dropdown Api
+
+export const getWarehousesDropdown = async (c: Context) => {
+  try {
+    const user = c.get("user");
+    let adminId = c.req.query("adminId");
+    const search = c.req.query("search") || "";
+
+    // Admin can only see their own warehouses
+    if (user.role === "admin") {
+      adminId = user._id;
+    }
+
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+    if (adminId) filter.adminId = new mongoose.Types.ObjectId(adminId);
+    if (search) filter.name = { $regex: search, $options: "i" };
+
+    const warehouses = await Warehouse.find(filter)
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(limit)
+      .select("_id name"); // Only for dropdown
+
+    const total = await Warehouse.countDocuments(filter);
+
+    return c.json({
+      success: true,
+      data: warehouses,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+
+//  Rack Dropdown Api
+
+export const getRacksDropdown = async (c: Context) => {
+  try {
+    const warehouseId = c.req.query("warehouseId");
+    const search = c.req.query("search") || "";
+
+    if (!warehouseId) {
+      return c.json({ success: false, message: "warehouseId is required" }, 400);
+    }
+
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const filter: any = { warehouseId: new mongoose.Types.ObjectId(warehouseId) };
+    if (search) filter.name = { $regex: search, $options: "i" };
+
+    const racks = await Rack.find(filter)
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(limit)
+      .select("_id name");
+
+    const total = await Rack.countDocuments(filter);
+
+    return c.json({
+      success: true,
+      data: racks,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
