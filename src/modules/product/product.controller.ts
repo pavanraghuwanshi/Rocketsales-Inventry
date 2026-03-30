@@ -17,48 +17,130 @@ export const paginationSchema = z.object({
 });
 
 // CREATE
+// export const createProduct = async (c: Context) => {
+//   try {
+//     const body = await c.req.json();
+//     const user = c.get("user");
+
+//     const {
+//       name,
+//       price,
+//       skuNumber,
+//       adminId,
+//       brandId,
+//       supplierId,
+//       categoryId,
+//       warehouseId,
+//       rackId,
+//       quantity,
+//     } = body;
+
+//     // ✅ validations
+//     if (!skuNumber || !categoryId ||!  brandId || ! supplierId) {
+//       return c.json(
+//         { success: false, message: "skuNumber, categoryId, brandId, supplierId are required" },
+//         400
+//       );
+//     }
+
+//     if (!warehouseId || !rackId) {
+//       return c.json(
+//         { success: false, message: "warehouseId and rackId are required" },
+//         400
+//       );
+//     }
+
+//     if (!quantity || quantity < 1) {
+//       return c.json(
+//         { success: false, message: "quantity must be at least 1" },
+//         400
+//       );
+//     }
+
+//     const finalAdminId =
+//       user.role === "superadmin" ? adminId || user.id : user.id;
+
+//     // ✅ check category
+//     const category = await Category.findById(categoryId);
+//     if (!category) {
+//       return c.json({ success: false, message: "Category not found" }, 404);
+//     }
+
+//     // 🔥 CHECK EXISTING PRODUCT BY SKU
+//     let product = await Product.findOne({ skuNumber });
+
+//     // ✅ product → create
+//     if (!product) {
+//       if (!name || !price) {
+//         return c.json(
+//           { success: false, message: "name and price required for new product" },
+//           400
+//         );
+//       }
+
+//       product = await Product.create({
+//         name,
+//         price,
+//         skuNumber,
+//         brandId,
+//         supplierId,
+//         categoryId,
+//         adminId: finalAdminId,
+//       });
+//     }
+
+//     // 🔥 ALWAYS ADD ITEMS
+//     const barcodes = await getBulkBarcodes(quantity);
+
+//     const productItems = barcodes.map((barcode) => ({
+//       productId: product!._id,
+//       warehouseId,
+//       rackId,
+//       barcodeNumber: barcode,
+//       skuNumber,
+//       adminId: finalAdminId,
+//     }));
+
+//     await ProductItem.insertMany(productItems);
+
+//     return c.json({
+//       success: true,
+//       data: product,
+//       itemsCreated: quantity,
+//       message: product ? "Stock added successfully" : "Product created",
+//     });
+
+//   } catch (error: any) {
+//     return c.json(
+//       { success: false, message: error.message },
+//       500
+//     );
+//   }
+// };
+
 export const createProduct = async (c: Context) => {
   try {
     const body = await c.req.json();
     const user = c.get("user");
 
-    const {
-      name,
-      price,
-      skuNumber,
-      adminId,
-      brandId,
-      supplierId,
-      categoryId,
-      warehouseId,
-      rackId,
-      quantity,
-    } = body;
+    const { name, price, skuNumber, adminId, brandId, supplierId, categoryId } = body;
 
     // ✅ validations
-    if (!skuNumber || !categoryId ||!  brandId || ! supplierId) {
+    if (!skuNumber || !categoryId || !brandId || !supplierId) {
       return c.json(
         { success: false, message: "skuNumber, categoryId, brandId, supplierId are required" },
         400
       );
     }
 
-    if (!warehouseId || !rackId) {
+    if (!name || !price) {
       return c.json(
-        { success: false, message: "warehouseId and rackId are required" },
+        { success: false, message: "name and price required for new product" },
         400
       );
     }
 
-    if (!quantity || quantity < 1) {
-      return c.json(
-        { success: false, message: "quantity must be at least 1" },
-        400
-      );
-    }
-
-    const finalAdminId =
-      user.role === "superadmin" ? adminId || user.id : user.id;
+    const finalAdminId = user.role === "superadmin" ? adminId || user.id : user.id;
 
     // ✅ check category
     const category = await Category.findById(categoryId);
@@ -68,55 +150,33 @@ export const createProduct = async (c: Context) => {
 
     // 🔥 CHECK EXISTING PRODUCT BY SKU
     let product = await Product.findOne({ skuNumber });
-
-    // ✅ product → create
-    if (!product) {
-      if (!name || !price) {
-        return c.json(
-          { success: false, message: "name and price required for new product" },
-          400
-        );
-      }
-
-      product = await Product.create({
-        name,
-        price,
-        skuNumber,
-        brandId,
-        supplierId,
-        categoryId,
-        adminId: finalAdminId,
-      });
+    if (product) {
+      return c.json({ success: false, message: "Product with this SKU already exists" }, 400);
     }
 
-    // 🔥 ALWAYS ADD ITEMS
-    const barcodes = await getBulkBarcodes(quantity);
-
-    const productItems = barcodes.map((barcode) => ({
-      productId: product!._id,
-      warehouseId,
-      rackId,
-      barcodeNumber: barcode,
+    // ✅ create product
+    product = await Product.create({
+      name,
+      price,
       skuNumber,
+      brandId,
+      supplierId,
+      categoryId,
       adminId: finalAdminId,
-    }));
-
-    await ProductItem.insertMany(productItems);
+    });
 
     return c.json({
       success: true,
       data: product,
-      itemsCreated: quantity,
-      message: product ? "Stock added successfully" : "Product created",
+      message: "Product created successfully",
     });
-
   } catch (error: any) {
-    return c.json(
-      { success: false, message: error.message },
-      500
-    );
+    return c.json({ success: false, message: error.message }, 500);
   }
 };
+
+
+
 
 // GET ALL (with populate 🔥)
 
