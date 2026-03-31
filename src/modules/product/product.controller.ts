@@ -123,12 +123,12 @@ export const createProduct = async (c: Context) => {
     const body = await c.req.json();
     const user = c.get("user");
 
-    const { name, price, skuNumber, adminId, brandId, supplierId, categoryId } = body;
+    const { name, price, skuNumber, adminId, brandId, categoryId } = body;
 
     // ✅ validations
-    if (!skuNumber || !categoryId || !brandId || !supplierId) {
+    if (!skuNumber || !categoryId || !brandId ) {
       return c.json(
-        { success: false, message: "skuNumber, categoryId, brandId, supplierId are required" },
+        { success: false, message: "skuNumber, categoryId, brandId, are required" },
         400
       );
     }
@@ -160,7 +160,6 @@ export const createProduct = async (c: Context) => {
       price,
       skuNumber,
       brandId,
-      supplierId,
       categoryId,
       adminId: finalAdminId,
     });
@@ -254,17 +253,6 @@ export const getProducts = async (c: Context) => {
             },
             { $unwind: { path: "$brandId", preserveNullAndEmptyArrays: true } },
 
-            // 🔗 supplier
-            {
-              $lookup: {
-                from: "suppliers",
-                localField: "supplierId",
-                foreignField: "_id",
-                as: "supplierId",
-              },
-            },
-            { $unwind: { path: "$supplierId", preserveNullAndEmptyArrays: true } },
-
             // 🔗 category
             {
               $lookup: {
@@ -292,9 +280,6 @@ export const getProducts = async (c: Context) => {
 
                 "brandId._id": 1,
                 "brandId.name": 1,
-
-                "supplierId._id": 1,
-                "supplierId.name": 1,
               },
             },
 
@@ -372,17 +357,6 @@ export const getProduct = async (c: Context) => {
       },
       { $unwind: { path: "$brandId", preserveNullAndEmptyArrays: true } },
 
-      // Lookup supplier
-      {
-        $lookup: {
-          from: "suppliers",
-          localField: "supplierId",
-          foreignField: "_id",
-          as: "supplierId",
-        },
-      },
-      { $unwind: { path: "$supplierId", preserveNullAndEmptyArrays: true } },
-
       // Lookup category
       {
         $lookup: {
@@ -436,7 +410,6 @@ export const getProduct = async (c: Context) => {
           createdAt: 1,
           updatedAt: 1,
           brandId: { _id: 1, name: 1 },
-          supplierId: { _id: 1, name: 1 },
           categoryId: { _id: 1, name: 1 },
           items: 1,
           totalItems: 1,
