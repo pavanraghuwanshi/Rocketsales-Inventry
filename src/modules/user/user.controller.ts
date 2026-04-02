@@ -186,6 +186,138 @@ export const getAllUsers = async (c: Context) => {
 };
 
 
+
+//  Update User
+export const updateUser = async (c: Context) => {
+  try {
+    const userId = c.req.param("id"); // ✅ params se id
+    const body = await c.req.json();
+
+    const { name, username, password, role, adminId } = body;
+
+    const loggedInUser = c.get("user");
+
+    if (!loggedInUser) {
+      return c.json({ message: "Unauthorized user" }, 401);
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return c.json({ message: "User not found" }, 404);
+    }
+
+    // 🔥 ROLE BASED LOGIC
+    let safeRole = role || user.role;
+    let finaladminId = user.adminId;
+
+    if (loggedInUser.role === "superadmin") {
+      if (role && !["admin", "user"].includes(role)) {
+        return c.json({ message: "Invalid role" }, 400);
+      }
+      finaladminId = adminId || user.adminId;
+    } 
+    else if (loggedInUser.role === "admin") {
+      if (user.role !== "user") {
+        return c.json({ message: "Admins can only update users" }, 403);
+      }
+
+      if (user.adminId.toString() !== loggedInUser.id) {
+        return c.json({ message: "Not your user" }, 403);
+      }
+
+      safeRole = "user";
+      finaladminId = loggedInUser.id;
+    } 
+    else {
+      return c.json({ message: "No permission" }, 403);
+    }
+
+    // 🔐 Update fields
+    if (name) user.name = name;
+    if (username) user.username = username;
+
+    if (password) {
+      user.password = await encryptPassword(password);
+    }
+
+    user.role = safeRole;
+    user.adminId = finaladminId;
+
+    await user.save();
+
+    return c.json({
+      success: true,
+      message: "User updated successfully",
+      data: {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        role: user.role,
+        adminId: user.adminId,
+      },
+    });
+
+  } catch (error) {
+    console.error("Update Error:", error);
+    return c.json({ message: "Internal Server Error" }, 500);
+  }
+};
+
+//  Delete User
+export const deleteUser = async (c: Context) => {
+  try {
+    const userId = c.req.param("id"); // ✅ params se id
+
+    const loggedInUser = c.get("user");
+
+    if (!loggedInUser) {
+      return c.json({ message: "Unauthorized user" }, 401);
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return c.json({ message: "User not found" }, 404);
+    }
+
+    // 🔥 ROLE BASED DELETE
+    if (loggedInUser.role === "superadmin") {
+      if (!["admin", "user"].includes(user.role)) {
+        return c.json({ message: "Cannot delete this role" }, 403);
+      }
+    } 
+    else if (loggedInUser.role === "admin") {
+      if (user.role !== "user") {
+        return c.json({ message: "Admins can only delete users" }, 403);
+      }
+
+      if (user.adminId.toString() !== loggedInUser.id) {
+        return c.json({ message: "Not your user" }, 403);
+      }
+    } 
+    else {
+      return c.json({ message: "No permission" }, 403);
+    }
+
+    // ❌ prevent self delete
+    if (user._id.toString() === loggedInUser.id) {
+      return c.json({ message: "You cannot delete yourself" }, 400);
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    return c.json({
+      success: true,
+      message: "User deleted successfully",
+    });
+
+  } catch (error) {
+    console.error("Delete Error:", error);
+    return c.json({ message: "Internal Server Error" }, 500);
+  }
+};
+
+
 // ✅ Login
 
 
