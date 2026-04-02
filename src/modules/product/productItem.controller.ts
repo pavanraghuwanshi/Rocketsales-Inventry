@@ -195,7 +195,6 @@ export const getProductItemsByRack = async (c: Context) => {
         select: "name skuNumber price brandId supplierId categoryId",
         populate: [
           { path: "brandId", select: "name" },       // populate brand
-          { path: "supplierId", select: "name" },    // populate supplier
           { path: "categoryId", select: "name" },    // populate category
         ],
       })
