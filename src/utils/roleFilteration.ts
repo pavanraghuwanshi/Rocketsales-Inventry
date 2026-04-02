@@ -1,4 +1,6 @@
-import type { Context } from "hono"; // adjust based on your framework
+import type { Context } from "hono";
+import mongoose from "mongoose";
+
 
 export const getRoleFilter = (c: Context, adminField: string) => {
   const user = c.get("user");
@@ -24,4 +26,28 @@ export const getRoleFilter = (c: Context, adminField: string) => {
       // any future roles → block by default
       return { id: null };
   }
+};
+
+
+
+export const resolveAdminId = (user: any, bodyAdminId?: string) => {
+	switch (user.role) {
+		case "superadmin":
+			if (!bodyAdminId) {
+				throw new Error("adminId is required for superadmin");
+			}
+			return new mongoose.Types.ObjectId(bodyAdminId);
+
+		case "admin":
+			return new mongoose.Types.ObjectId(user.id);
+
+		case "user":
+			if (!user.adminId) {
+				throw new Error("No admin assigned to this user");
+			}
+			return new mongoose.Types.ObjectId(user.adminId);
+
+		default:
+			throw new Error("Unauthorized role");
+	}
 };

@@ -1,5 +1,7 @@
 import type { Context } from "hono";
-import { getRoleFilter } from "../../utils/roleFilteration"; // adjust path
+import { getRoleFilter } from "../../utils/roleFilteration";
+import { resolveAdminId } from "../../utils/roleFilteration";
+
 
 import Category from "./category.model";
 import { z } from "zod";
@@ -12,50 +14,27 @@ export const paginationSchema = z.object({
 });
 
 // Create Category
+
 export const createCategory = async (c: Context) => {
 	try {
 		const user = c.get("user");
 		const body = await c.req.json();
 
-		let { name, adminId } = body;
+		const { name } = body;
 
 		if (!name) {
-			return c.json(
-				{ success: false, message: "Category name is required" },
-				400
-			);
+			return c.json({ success: false, message: "Category name is required" }, 400);
 		}
 
-		// ✅ ROLE BASED adminId SET
-		if (user.role === "superadmin") {
-			if (!adminId) {
-				return c.json(
-					{ success: false, message: "adminId is required for superadmin" },
-					400
-				);
-			}
-			adminId = new mongoose.Types.ObjectId(adminId);
-		} 
-		else if (user.role === "admin") {
-			adminId = new mongoose.Types.ObjectId(user.id);
-		} 
-		else if (user.role === "user") {
-			if (!user.adminId) {
-				return c.json(
-					{ success: false, message: "No admin assigned to this user" },
-					400
-				);
-			}
-			adminId = new mongoose.Types.ObjectId(user.adminId);
-		} 
-		else {
-			return c.json(
-				{ success: false, message: "Unauthorized role" },
-				403
-			);
+		// ✅ Common function use
+		let adminId;
+		try {
+			adminId = resolveAdminId(user, body.adminId);
+		} catch (err: any) {
+			return c.json({ success: false, message: err.message }, 400);
 		}
 
-		// ✅ Duplicate check (role-based adminId)
+		// Duplicate check
 		const existingCategory = await Category.findOne({
 			name: name.trim(),
 			adminId,
@@ -63,15 +42,11 @@ export const createCategory = async (c: Context) => {
 
 		if (existingCategory) {
 			return c.json(
-				{
-					success: false,
-					message: "Category already exists for this admin",
-				},
+				{ success: false, message: "Category already exists for this admin" },
 				409
 			);
 		}
 
-		// ✅ Create
 		const category = await Category.create({
 			name: name.trim(),
 			adminId,
@@ -79,14 +54,9 @@ export const createCategory = async (c: Context) => {
 
 		return c.json({ success: true, data: category }, 201);
 
-	} catch (error) {
-		const err = error as Error;
+	} catch (error: any) {
 		return c.json(
-			{
-				success: false,
-				message: "Failed to create category",
-				error: err.message,
-			},
+			{ success: false, message: "Failed to create category", error: error.message },
 			500
 		);
 	}
