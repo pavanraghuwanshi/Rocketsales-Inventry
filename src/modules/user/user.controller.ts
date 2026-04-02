@@ -186,6 +186,58 @@ export const getAllUsers = async (c: Context) => {
 };
 
 
+// Get Admin Users Dropdown
+export const getAdminUsersDropdown = async (c: Context) => {
+  try {
+    const loggedInUser = c.get("user");
+
+    if (!loggedInUser) {
+      return c.json({ message: "Unauthorized user" }, 401);
+    }
+
+    const { search = "" } = c.req.query();
+
+    const filter: any = {
+      role: "admin", // ✅ only admin users
+    };
+
+    // 👉 search
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { username: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // 👉 role-based access
+    if (loggedInUser.role === "superadmin") {
+      // ✅ can see all admins
+    } else if (loggedInUser.role === "admin") {
+      // ❌ admin cannot see admin dropdown (no nested admin)
+      return c.json({
+        success: true,
+        data: [], // 👈 empty dropdown
+      });
+    } else {
+      return c.json({ message: "You do not have permission" }, 403);
+    }
+
+    const users = await User.find(filter)
+      .select("_id name username")
+      .sort({ name: 1 });
+
+    return c.json({
+      success: true,
+      data: users,
+    });
+
+  } catch (error) {
+    console.error("Admin Dropdown Error:", error);
+    return c.json({ message: "Internal Server Error" }, 500);
+  }
+};
+
+
 
 //  Update User
 export const updateUser = async (c: Context) => {
