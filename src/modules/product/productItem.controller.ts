@@ -91,6 +91,39 @@ export const addProductItems = async (c: Context) => {
       adminId: finalAdminId,
     }));
 
+    const existingItems = await ProductItem.find({
+      barcodeNumber: { $in: barcodes },
+    }).select("barcodeNumber");
+
+    const existingBarcodes = existingItems.map(item => item.barcodeNumber);
+
+    // 🔥 filter only new barcodes
+    const newBarcodes = barcodes.filter(
+      (barcode: string) => !existingBarcodes.includes(barcode)
+    );
+
+    // 🔥 update productItems based on newBarcodes only
+    const filteredProductItems = newBarcodes.map((barcode: string) => ({
+      productId: product._id,
+      categoryId: product.categoryId,
+      warehouseId,
+      rackId,
+      barcodeNumber: barcode,
+      skuNumber: product.skuNumber,
+      adminId: finalAdminId,
+    }));
+
+    if (filteredProductItems.length > 0) {
+      await ProductItem.insertMany(filteredProductItems);
+    }
+
+return c.json({
+  success: true,
+  inserted: filteredProductItems.length,
+  duplicates: existingBarcodes,
+  message: "Processed with duplicate filtering",
+});
+
     await ProductItem.insertMany(productItems);
 
     return c.json({
