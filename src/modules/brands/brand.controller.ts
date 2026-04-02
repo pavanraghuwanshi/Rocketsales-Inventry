@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import Brand from "./brand.model";
 import { z } from "zod";
+import { getRoleFilter } from "../../utils/roleFilteration";
 
 export const paginationSchema = z.object({
   page: z.string().optional(),
@@ -23,10 +24,10 @@ export const createBrand = async (c: Context) => {
 
   if (user.role === "superadmin") {
     // superadmin kisi admin ke liye create karega
-    createdBy = adminId || user._id;
+    createdBy = adminId || user.id;
   } else {
     // admin apne liye hi create karega
-    createdBy = user._id;
+    createdBy = user.id;
   }
 
   const existingBrand = await Brand.findOne({ name: name.trim(), createdBy });
@@ -44,30 +45,64 @@ export const createBrand = async (c: Context) => {
 };
 
 // GET ALL
+// export const getBrands = async (c: Context) => {
+//   try {
+//     const user = c.get("user");
+//     const query = paginationSchema.parse(c.req.query());
+
+//     const page = parseInt(query.page || "1");
+//     const limit = parseInt(query.limit || "10");
+//     const skip = (page - 1) * limit;
+
+//     const searchFilter = query.search
+//       ? { name: { $regex: query.search, $options: "i" } }
+//       : {};
+
+//     let roleFilter = {};
+
+//     if (user.role === "admin") {
+//       roleFilter = { createdBy: user._id };
+//     }
+//     // superadmin -> no filter (see all)
+
+//     const filter = {
+//       ...searchFilter,
+//       ...roleFilter,
+//     };
+
+//     const [brands, total] = await Promise.all([
+//       Brand.find(filter).skip(skip).limit(limit),
+//       Brand.countDocuments(filter),
+//     ]);
+
+//     return c.json({
+//       success: true,
+//       data: brands,
+//       pagination: {
+//         total,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(total / limit),
+//       },
+//     });
+//   } catch (error: any) {
+//     return c.json({ success: false, message: error.message }, 500);
+//   }
+// };
+
 export const getBrands = async (c: Context) => {
   try {
-    const user = c.get("user");
-    const query = paginationSchema.parse(c.req.query());
+    const userFilter = getRoleFilter(c, "createdBy");
 
+
+    const query = paginationSchema.parse(c.req.query());
     const page = parseInt(query.page || "1");
     const limit = parseInt(query.limit || "10");
     const skip = (page - 1) * limit;
 
-    const searchFilter = query.search
-      ? { name: { $regex: query.search, $options: "i" } }
-      : {};
+    const searchFilter = query.search ? { name: { $regex: query.search, $options: "i" } } : {};
 
-    let roleFilter = {};
-
-    if (user.role === "admin") {
-      roleFilter = { createdBy: user._id };
-    }
-    // superadmin -> no filter (see all)
-
-    const filter = {
-      ...searchFilter,
-      ...roleFilter,
-    };
+    const filter = { ...searchFilter, ...userFilter };
 
     const [brands, total] = await Promise.all([
       Brand.find(filter).skip(skip).limit(limit),
@@ -113,7 +148,7 @@ export const updateBrand = async (c: Context) => {
   // 🚫 Unauthorized check
   if (
     user.role !== "superadmin" &&
-    brand.adminId.toString() !== user._id
+    brand.adminId.toString() !== user.id
   ) {
     return c.json({ success: false, message: "Unauthorized" }, 403);
   }
@@ -140,7 +175,7 @@ export const deleteBrand = async (c: Context) => {
   // 🚫 Unauthorized check
   if (
     user.role !== "superadmin" &&
-    brand.adminId.toString() !== user._id
+    brand.adminId.toString() !== user.id
   ) {
     return c.json({ success: false, message: "Unauthorized" }, 403);
   }

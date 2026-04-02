@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import Supplier from "./supplier.model";
 import { z } from "zod";
+import { getRoleFilter } from "../../utils/roleFilteration";
 
 
 
@@ -13,7 +14,7 @@ export const paginationSchema = z.object({
 
 const getAdminId = (user: any, bodyAdminId?: string) => {
   if (user.role === "admin") return user.id;
-  return bodyAdminId || user._id;
+  return bodyAdminId || user.id;
 };
 
 // CREATE
@@ -36,38 +37,73 @@ export const createSupplier = async (c: Context) => {
 };
 
 // GET ALL
+// export const getSuppliers = async (c: Context) => {
+//   try {
+//     const user = c.get("user");
+//     const query = paginationSchema.parse(c.req.query());
+
+//     const page = parseInt(query.page || "1");
+//     const limit = parseInt(query.limit || "10");
+//     const skip = (page - 1) * limit;
+
+//     const searchFilter = query.search
+//       ? {
+//           $or: [
+//             { name: { $regex: query.search, $options: "i" } },
+//             { email: { $regex: query.search, $options: "i" } },
+//           ],
+//         }
+//       : {};
+
+//     let adminId = c.req.query("adminId");
+
+//     // 👉 Same logic everywhere
+//     if (user.role === "admin") {
+//       adminId = user._id;
+//     }
+
+//     const filter: any = {
+//       ...searchFilter,
+//     };
+
+//     if (adminId) {
+//       filter.adminId = adminId;
+//     }
+
+//     const [suppliers, total] = await Promise.all([
+//       Supplier.find(filter).populate("adminId", "name").skip(skip).limit(limit).sort({ createdAt: -1 }),
+//       Supplier.countDocuments(filter),
+//     ]);
+
+//     return c.json({
+//       success: true,
+//       data: suppliers,
+//       pagination: {
+//         total,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(total / limit),
+//       },
+//     });
+//   } catch (error: any) {
+//     return c.json({ success: false, message: error.message }, 500);
+//   }
+// };
+
 export const getSuppliers = async (c: Context) => {
   try {
-    const user = c.get("user");
-    const query = paginationSchema.parse(c.req.query());
+    const userFilter = getRoleFilter(c, "adminId");
 
+    const query = paginationSchema.parse(c.req.query());
     const page = parseInt(query.page || "1");
     const limit = parseInt(query.limit || "10");
     const skip = (page - 1) * limit;
 
     const searchFilter = query.search
-      ? {
-          $or: [
-            { name: { $regex: query.search, $options: "i" } },
-            { email: { $regex: query.search, $options: "i" } },
-          ],
-        }
+      ? { $or: [{ name: { $regex: query.search, $options: "i" } }, { email: { $regex: query.search, $options: "i" } }] }
       : {};
 
-    let adminId = c.req.query("adminId");
-
-    // 👉 Same logic everywhere
-    if (user.role === "admin") {
-      adminId = user._id;
-    }
-
-    const filter: any = {
-      ...searchFilter,
-    };
-
-    if (adminId) {
-      filter.adminId = adminId;
-    }
+    const filter = { ...searchFilter, ...userFilter };
 
     const [suppliers, total] = await Promise.all([
       Supplier.find(filter).populate("adminId", "name").skip(skip).limit(limit).sort({ createdAt: -1 }),
@@ -98,7 +134,7 @@ export const getSupplier = async (c: Context) => {
     let adminId: any = undefined;
 
     if (user.role === "admin") {
-      adminId = user._id;
+      adminId = user.id;
     }
 
     const supplier = await Supplier.findOne({
@@ -126,7 +162,7 @@ export const updateSupplier = async (c: Context) => {
     let adminId: any = undefined;
 
     if (user.role === "admin") {
-      adminId = user._id;
+      adminId = user.id;
     }
 
     const supplier = await Supplier.findOneAndUpdate(
@@ -166,7 +202,7 @@ export const deleteSupplier = async (c: Context) => {
     // 🚫 Unauthorized check
     if (
       user.role !== "superadmin" &&
-      existingSupplier.adminId?.toString() !== user._id
+      existingSupplier.adminId?.toString() !== user.id
     ) {
       return c.json({ success: false, message: "Unauthorized" }, 403);
     }
