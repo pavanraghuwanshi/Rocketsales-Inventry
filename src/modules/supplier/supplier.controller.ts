@@ -37,59 +37,6 @@ export const createSupplier = async (c: Context) => {
 };
 
 // GET ALL
-// export const getSuppliers = async (c: Context) => {
-//   try {
-//     const user = c.get("user");
-//     const query = paginationSchema.parse(c.req.query());
-
-//     const page = parseInt(query.page || "1");
-//     const limit = parseInt(query.limit || "10");
-//     const skip = (page - 1) * limit;
-
-//     const searchFilter = query.search
-//       ? {
-//           $or: [
-//             { name: { $regex: query.search, $options: "i" } },
-//             { email: { $regex: query.search, $options: "i" } },
-//           ],
-//         }
-//       : {};
-
-//     let adminId = c.req.query("adminId");
-
-//     // 👉 Same logic everywhere
-//     if (user.role === "admin") {
-//       adminId = user._id;
-//     }
-
-//     const filter: any = {
-//       ...searchFilter,
-//     };
-
-//     if (adminId) {
-//       filter.adminId = adminId;
-//     }
-
-//     const [suppliers, total] = await Promise.all([
-//       Supplier.find(filter).populate("adminId", "name").skip(skip).limit(limit).sort({ createdAt: -1 }),
-//       Supplier.countDocuments(filter),
-//     ]);
-
-//     return c.json({
-//       success: true,
-//       data: suppliers,
-//       pagination: {
-//         total,
-//         page,
-//         limit,
-//         totalPages: Math.ceil(total / limit),
-//       },
-//     });
-//   } catch (error: any) {
-//     return c.json({ success: false, message: error.message }, 500);
-//   }
-// };
-
 export const getSuppliers = async (c: Context) => {
   try {
     const userFilter = getRoleFilter(c, "adminId");
@@ -119,6 +66,35 @@ export const getSuppliers = async (c: Context) => {
         limit,
         totalPages: Math.ceil(total / limit),
       },
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+//  GET dropdown (id and name only, with search)
+export const getSuppliersDropdown = async (c: Context) => {
+  try {
+    const userFilter = getRoleFilter(c, "adminId");
+
+    const query = c.req.query();
+    const search = query.search;
+
+    const searchFilter = search
+      ? {
+          name: { $regex: search, $options: "i" },
+        }
+      : {};
+
+    const filter = { ...searchFilter, ...userFilter };
+
+    const suppliers = await Supplier.find(filter)
+      .select("_id name") // ✅ only required fields
+      .sort({ name: 1 });
+
+    return c.json({
+      success: true,
+      data: suppliers,
     });
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
