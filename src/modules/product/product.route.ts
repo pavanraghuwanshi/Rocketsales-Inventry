@@ -5,6 +5,7 @@ import {
   getProduct,
   updateProduct,
   deleteProduct,
+  getProductsDropdown,
 } from "./product.controller";
 import { verifyToken } from "../../middleware/auth.middleware";
 
@@ -14,6 +15,7 @@ productRoutes.use("*", verifyToken);
 
 productRoutes.post("/", createProduct);
 productRoutes.get("/", getProducts);
+productRoutes.get("/dropdown", getProductsDropdown);
 productRoutes.get("/:id", getProduct);
 productRoutes.put("/:id", updateProduct);
 productRoutes.delete("/:id", deleteProduct);

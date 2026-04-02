@@ -14,6 +14,8 @@ export const paginationSchema = z.object({
   page: z.string().optional(),
   limit: z.string().optional(),
   search: z.string().optional(),
+  brandId: z.string().optional(),
+  categoryId: z.string().optional(),
 });
 
 // CREATE
@@ -313,6 +315,93 @@ export const getProducts = async (c: Context) => {
     );
   }
 };
+
+
+// get products drop-down
+
+export const getProductsDropdown = async (c: Context) => {
+  try {
+    const user = c.get("user");
+    const query = paginationSchema.parse(c.req.query());
+
+    const page = parseInt(query.page || "1");
+    const limit = parseInt(query.limit || "10");
+    const skip = (page - 1) * limit;
+
+    const { search, brandId, categoryId } = query;
+
+    // 🔍 Search
+    const searchFilter = search
+      ? { name: { $regex: search, $options: "i" } }
+      : {};
+
+    // 👤 Role filter
+    const roleFilter =
+      user.role === "admin"
+        ? { adminId: new mongoose.Types.ObjectId(user.id) }
+        : {};
+
+    // 🧠 Optional filters
+    const optionalFilter: any = {};
+
+    if (brandId) {
+      optionalFilter.brandId = new mongoose.Types.ObjectId(brandId);
+    }
+
+    if (categoryId) {
+      optionalFilter.categoryId = new mongoose.Types.ObjectId(categoryId);
+    }
+
+    const matchFilter = {
+      ...searchFilter,
+      ...roleFilter,
+      ...optionalFilter,
+    };
+
+    const result = await Product.aggregate([
+      { $match: matchFilter },
+
+      {
+        $facet: {
+          data: [
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                skuNumber: 1,
+              },
+            },
+            { $skip: skip },
+            { $limit: limit },
+          ],
+
+          totalCount: [{ $count: "total" }],
+        },
+      },
+    ]);
+
+    const products = result[0]?.data || [];
+    const total = result[0]?.totalCount[0]?.total || 0;
+
+    return c.json({
+      success: true,
+      data: products,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      500
+    );
+  }
+};
+
+
 
 // GET SINGLE
 export const getProduct = async (c: Context) => {
