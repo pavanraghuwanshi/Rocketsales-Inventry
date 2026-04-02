@@ -8,8 +8,11 @@ import {
 	updateCategory,
 	deleteCategory,
 } from "./category.controller";
+import { verifyToken } from "../../middleware/auth.middleware";
 
 const categoryRoutes = new Hono();
+
+categoryRoutes.use("*",verifyToken);
 
 categoryRoutes.post("/", createCategory);
 categoryRoutes.get("/", getCategories);
