@@ -156,12 +156,17 @@ export const getAllUsers = async (c: Context) => {
       .sort({ createdAt: -1 }); // latest first
 
 
-    const updatedUsers = users.map((user) => {
-        return {
-          ...user.toObject(),
-          password: decryptPassword(user.password),
-        };
-      });
+      const updatedUsers = users.map((user) => {
+      const obj = user.toObject();
+
+      const { password, ...rest } = obj; // 👈 remove original password
+
+      return {
+        ...rest,
+        password: decryptPassword(password), // 👈 decrypted as password
+      };
+    });
+
       
 
     return c.json({
