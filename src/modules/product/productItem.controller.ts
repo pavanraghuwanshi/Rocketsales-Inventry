@@ -80,22 +80,17 @@ export const addProductItems = async (c: Context) => {
 export const getProductItems = async (c: Context) => {
   try {
     const user = c.get("user");
+
     const rackId = c.req.query("rackId");
     const warehouseId = c.req.query("warehouseId");
-    const search = c.req.query("search") || ""; // optional search by barcode or SKU
+    const search = c.req.query("search") || "";
     const page = parseInt(c.req.query("page") || "1");
     const limit = parseInt(c.req.query("limit") || "10");
 
-    // At least one filter required
-    if (!rackId && !warehouseId) {
-      return c.json(
-        { success: false, message: "Either rackId or warehouseId query param is required" },
-        400
-      );
-    }
-
-    // Build query dynamically
-    const query: any = { status: "available" }; // only available items
+    // ✅ All filters optional
+    const query: any = {
+      status: "available", // keep default filter if needed
+    };
 
     if (rackId) query.rackId = rackId;
     if (warehouseId) query.warehouseId = warehouseId;
