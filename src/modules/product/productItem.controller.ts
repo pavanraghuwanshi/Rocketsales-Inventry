@@ -83,6 +83,7 @@ export const addProductItems = async (c: Context) => {
     // 🔥 create product items
     const productItems = barcodes.map((barcode: string) => ({
       productId: product._id,
+      categoryId: product.categoryId,
       warehouseId,
       rackId,
       barcodeNumber: barcode,

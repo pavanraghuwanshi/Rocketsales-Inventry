@@ -152,12 +152,21 @@ export const getAllUsers = async (c: Context) => {
     const users = await User.find(searchFilter)
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
-      .select("name username role adminId") // ✅ only expose needed fields
+      .select("name username role adminId password") // ✅ only expose needed fields
       .sort({ createdAt: -1 }); // latest first
+
+
+    const updatedUsers = users.map((user) => {
+        return {
+          ...user.toObject(),
+          password: decryptPassword(user.password),
+        };
+      });
+      
 
     return c.json({
       success: true,
-      data: users,
+      data: updatedUsers,
       pagination: {
         total,
         page:pageNum,

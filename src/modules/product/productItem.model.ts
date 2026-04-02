@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IProductItem extends Document {
   productId: mongoose.Types.ObjectId;
+  categoryId: mongoose.Types.ObjectId;
   warehouseId: mongoose.Types.ObjectId;
   rackId: mongoose.Types.ObjectId;
   barcodeNumber: string;
@@ -17,7 +18,11 @@ const productItemSchema = new Schema<IProductItem>(
       ref: "Product",
       required: true,
     },
-
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      required: true,
+    },
     warehouseId: {
       type: Schema.Types.ObjectId,
       ref: "Warehouse",
