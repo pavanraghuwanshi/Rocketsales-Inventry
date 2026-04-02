@@ -3,6 +3,8 @@ import type { Context } from "hono";
 import Warehouse from "./warehouse.model";
 import Rack from "./rack.model";
 import ProductItem from "../product/productItem.model";
+import { getRoleFilter } from "../../utils/roleFilteration"; // adjust path
+
 import mongoose from "mongoose";
 
 
@@ -131,58 +133,63 @@ export const updateWarehouse = async (c: Context) => {
 
 
 //  get ware house with search or pagination
+
 export const getWarehouses = async (c: Context) => {
   try {
-    const user = c.get("user");
-
-    let adminId = c.req.query("adminId");
     const search = c.req.query("search") || "";
-
-    // Role logic
-    if (user.role === "admin") {
-      adminId = user._id;
-    }
 
     // Pagination
     const page = parseInt(c.req.query("page") || "1");
     const limit = parseInt(c.req.query("limit") || "10");
     const skip = (page - 1) * limit;
 
-    // Filter
-    const filter: any = {};
-    if (adminId) filter.adminId = new mongoose.Types.ObjectId(adminId);
-    if (search) filter.name = { $regex: search, $options: "i" };
+    // ✅ ROLE FILTER (common function use)
+    const roleFilter = getRoleFilter(c, "adminId");
 
-    // Get warehouses with pagination
+    // Filter
+    const filter: any = {
+      ...roleFilter, // 🔥 role-based filtering applied here
+    };
+
+    if (search) {
+      filter.name = { $regex: search, $options: "i" };
+    }
+
+    // Get warehouses
     const warehouses = await Warehouse.find(filter)
       .populate("adminId", "name")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    const warehouseIds = warehouses.map(w => w._id);
+    const warehouseIds = warehouses.map((w) => w._id);
 
-    // Count racks per warehouse
+    // Racks count
     const racksCount = await Rack.aggregate([
       { $match: { warehouseId: { $in: warehouseIds } } },
       { $group: { _id: "$warehouseId", totalRacks: { $sum: 1 } } },
     ]);
 
-    // Count items per warehouse (via racks)
+    // Items count
     const itemsCount = await ProductItem.aggregate([
-          {
-     $match: {
+      {
+        $match: {
           warehouseId: { $in: warehouseIds },
-          status: "available", // ✅ only available items
-     },
-     },
+          status: "available",
+        },
+      },
       { $group: { _id: "$warehouseId", totalItems: { $sum: 1 } } },
     ]);
 
-    // Merge counts into warehouses
-    const data = warehouses.map(w => {
-      const rackData = racksCount.find(r => r._id.toString() === w._id.toString());
-      const itemData = itemsCount.find(i => i._id.toString() === w._id.toString());
+    // Merge
+    const data = warehouses.map((w) => {
+      const rackData = racksCount.find(
+        (r) => r._id.toString() === w._id.toString()
+      );
+      const itemData = itemsCount.find(
+        (i) => i._id.toString() === w._id.toString()
+      );
+
       return {
         ...w.toObject(),
         totalRacks: rackData?.totalRacks || 0,
@@ -202,7 +209,6 @@ export const getWarehouses = async (c: Context) => {
         totalPages: Math.ceil(total / limit),
       },
     });
-
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
   }
@@ -288,7 +294,7 @@ export const getWarehousesDropdown = async (c: Context) => {
 
     // Admin can only see their own warehouses
     if (user.role === "admin") {
-      adminId = user._id;
+      adminId = user.id;
     }
 
     const page = parseInt(c.req.query("page") || "1");
