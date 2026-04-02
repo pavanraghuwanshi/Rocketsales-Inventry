@@ -1,8 +1,6 @@
-
-
-
-
 import type { Context } from "hono";
+import { getRoleFilter } from "../../utils/roleFilteration"; // adjust path
+
 import Category from "./category.model";
 import { z } from "zod";
 
@@ -36,31 +34,35 @@ export const createCategory = async (c: Context) => {
 };
 
 // Get all categories with pagination and search
+
 export const getCategories = async (c: Context) => {
 	try {
-		const user = c.get("user");
 		const query = paginationSchema.parse(c.req.query());
 
 		const page = parseInt(query.page || "1");
 		const limit = parseInt(query.limit || "10");
 		const skip = (page - 1) * limit;
 
+		// 🔍 Search filter
 		const searchFilter = query.search
 			? { name: { $regex: query.search, $options: "i" } }
 			: {};
 
-		let roleFilter = {};
-		if (user && user.role === "admin") {
-			roleFilter = { adminId: user._id };
-		}
+		// ✅ ROLE FILTER (common function)
+		const roleFilter = getRoleFilter(c, "adminId");
 
+		// Final filter
 		const filter = {
 			...searchFilter,
 			...roleFilter,
 		};
 
 		const [categories, total] = await Promise.all([
-			Category.find(filter).skip(skip).limit(limit),
+			Category.find(filter)
+				.sort({ createdAt: -1 })
+				.skip(skip)
+				.limit(limit),
+
 			Category.countDocuments(filter),
 		]);
 
@@ -76,7 +78,14 @@ export const getCategories = async (c: Context) => {
 		});
 	} catch (error) {
 		const err = error as Error;
-		return c.json({ success: false, message: "Failed to fetch categories", error: err.message }, 500);
+		return c.json(
+			{
+				success: false,
+				message: "Failed to fetch categories",
+				error: err.message,
+			},
+			500
+		);
 	}
 };
 
