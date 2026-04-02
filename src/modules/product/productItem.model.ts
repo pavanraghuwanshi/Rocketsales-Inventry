@@ -5,6 +5,8 @@ export interface IProductItem extends Document {
   categoryId: mongoose.Types.ObjectId;
   warehouseId: mongoose.Types.ObjectId;
   rackId: mongoose.Types.ObjectId;
+  supplierId: mongoose.Types.ObjectId;
+  brandId: mongoose.Types.ObjectId;
   barcodeNumber: string;
   skuNumber: string;
   adminId: mongoose.Types.ObjectId;
@@ -28,7 +30,16 @@ const productItemSchema = new Schema<IProductItem>(
       ref: "Warehouse",
       required: true,
     },
-
+    brandId: {
+      type: Schema.Types.ObjectId,
+      ref: "Brand",
+      required: true,
+    },
+    supplierId: {
+      type: Schema.Types.ObjectId,
+      ref: "Supplier",
+      required: true,
+    },
     rackId: {
       type: Schema.Types.ObjectId,
       ref: "Rack",
