@@ -11,37 +11,80 @@ export const paginationSchema = z.object({
 
 // CREATE
 export const createBrand = async (c: Context) => {
-  const body = await c.req.json();
-  const user = c.get("user");
+  try {
+    const body = await c.req.json();
+    const user = c.get("user");
 
-  const { name, adminId } = body;
+    const { name, adminId } = body;
 
-  if (!name) {
-    return c.json({ success: false, message: "Brand name is required" }, 400);
+    // ✅ Validate name
+    if (!name || !name.trim()) {
+      return c.json({ success: false, message: "Brand name is required" }, 400);
+    }
+
+    // ✅ Normalize name (avoid Nike vs nike issue)
+    const normalizedName = name.trim().toLowerCase();
+
+    let createdBy;
+
+    // ✅ Role handling
+    if (user.role === "superadmin") {
+      if (!adminId) {
+        return c.json(
+          { success: false, message: "adminId is required for superadmin" },
+          400
+        );
+      }
+      createdBy = adminId;
+    } else if (user.role === "admin") {
+      createdBy = user.id;
+    } else {
+      return c.json(
+        { success: false, message: "Not authorized to create brand" },
+        403
+      );
+    }
+
+    // ✅ Check duplicate (optional but good UX)
+    const existingBrand = await Brand.findOne({
+      name: normalizedName,
+      adminId: createdBy,
+    });
+
+    if (existingBrand) {
+      return c.json(
+        { success: false, message: "Brand already exists" },
+        409
+      );
+    }
+
+    // ✅ Create brand
+    const brand = await Brand.create({
+      ...body,
+      name: normalizedName,
+      adminId: createdBy,
+    });
+
+    return c.json({
+      success: true,
+      message: "Brand created successfully",
+      data: brand,
+    });
+
+  } catch (error: any) {
+    // ✅ Handle Mongo duplicate error (important)
+    if (error.code === 11000) {
+      return c.json(
+        { success: false, message: "Brand already exists" },
+        409
+      );
+    }
+
+    return c.json(
+      { success: false, message: error.message || "Internal Server Error" },
+      500
+    );
   }
-
-  let createdBy;
-
-  if (user.role === "superadmin") {
-    // superadmin kisi admin ke liye create karega
-    createdBy = adminId || user.id;
-  } else {
-    // admin apne liye hi create karega
-    createdBy = user.id;
-  }
-
-  const existingBrand = await Brand.findOne({ name: name.trim(), createdBy });
-
-  if (existingBrand) {
-    return c.json({ success: false, message: "Brand already exists" }, 409);
-  }
-
-  const brand = await Brand.create({
-    ...body,
-    createdBy,
-  });
-
-  return c.json({ success: true, data: brand });
 };
 
 // GET ALL
@@ -92,7 +135,7 @@ export const createBrand = async (c: Context) => {
 
 export const getBrands = async (c: Context) => {
   try {
-    const userFilter = getRoleFilter(c, "createdBy");
+    const userFilter = getRoleFilter(c, "adminId");
 
 
     const query = paginationSchema.parse(c.req.query());

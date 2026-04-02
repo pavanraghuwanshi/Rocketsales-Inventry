@@ -3,7 +3,6 @@ import type { Context } from "hono"; // adjust based on your framework
 export const getRoleFilter = (c: Context, adminField: string) => {
   const user = c.get("user");
 
-  console.log(user,"gggggg")
 
   if (!user) throw new Error("User not found in context");
 
