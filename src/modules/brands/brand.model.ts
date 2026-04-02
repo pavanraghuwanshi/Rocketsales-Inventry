@@ -8,7 +8,7 @@ export interface IBrand extends Document {
 
 const brandSchema = new Schema<IBrand>(
   {
-    name: { type: String, required: true, unique: true },
+    name: { type: String, required: true, },
     description: String,
     adminId: {
      type: mongoose.Schema.Types.ObjectId,
@@ -16,6 +16,11 @@ const brandSchema = new Schema<IBrand>(
      }
   },
   { timestamps: true }
+);
+
+brandSchema.index(
+  { name: 1, adminId: 1 },
+  { unique: true }
 );
 
 export default mongoose.model<IBrand>("Brand", brandSchema);
