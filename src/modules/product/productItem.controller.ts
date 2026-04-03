@@ -288,10 +288,19 @@ export const markProductAsSold = async (c: Context) => {
       );
     }
 
-    const adminId =
-      user.role === "superadmin" ? body.adminId || user.id : user.id;
+    // ✅ role-based adminId logic
+    let adminId;
 
-    // ✅ find product item using barcode + adminId
+    if (user.role === "superadmin") {
+      adminId = body.adminId || user.id;
+    } else if (user.role === "admin") {
+      adminId = user.id;
+    } else {
+      // user role
+      adminId = user.adminId;
+    }
+
+    // ✅ find product item
     const item = await ProductItem.findOne({
       barcodeNumber,
       adminId,
@@ -304,7 +313,7 @@ export const markProductAsSold = async (c: Context) => {
       );
     }
 
-    // ✅ check if already sold
+    // ✅ already sold check
     if (item.status === "sold") {
       return c.json(
         { success: false, message: "Item already sold" },
@@ -312,7 +321,7 @@ export const markProductAsSold = async (c: Context) => {
       );
     }
 
-    // ✅ update status
+    // ✅ update
     item.status = "sold";
     item.outStockDate = new Date();
 
