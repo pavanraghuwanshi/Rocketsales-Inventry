@@ -404,3 +404,204 @@ export const getProductAging = async (c: Context) => {
     return c.json({ success: false, message: error.message }, 500);
   }
 };
+
+
+
+//  get product Item warehouse-wise Today Activity for dashboard
+export const getTodayActivity = async (c: Context) => {
+  try {
+    const rackId = c.req.query("rackId");
+    const warehouseId = c.req.query("warehouseId");
+    const search = c.req.query("search") || "";
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    // 📅 Today range
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const itemMatch: any = {};
+    if (rackId) itemMatch.rackId = rackId;
+    if (warehouseId) itemMatch.warehouseId = warehouseId;
+
+    const result = await Product.aggregate([
+      // 🔍 search
+      {
+        $match: search
+          ? { name: { $regex: search, $options: "i" } }
+          : {},
+      },
+
+      // 🔗 productItems join
+      {
+        $lookup: {
+          from: "productitems",
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$productId", "$$productId"] },
+                ...itemMatch,
+              },
+            },
+          ],
+          as: "items",
+        },
+      },
+
+      { $unwind: "$items" },
+
+      // 🔗 rack
+      {
+        $lookup: {
+          from: "racks",
+          localField: "items.rackId",
+          foreignField: "_id",
+          as: "rack",
+        },
+      },
+      { $unwind: { path: "$rack", preserveNullAndEmptyArrays: true } },
+
+      // 🔗 warehouse
+      {
+        $lookup: {
+          from: "warehouses",
+          localField: "items.warehouseId",
+          foreignField: "_id",
+          as: "warehouse",
+        },
+      },
+      { $unwind: { path: "$warehouse", preserveNullAndEmptyArrays: true } },
+
+      // 🔥 split added & sold
+      {
+        $facet: {
+          // ✅ ADDED TODAY
+          added: [
+            {
+              $match: {
+                "items.createdAt": {
+                  $gte: startOfDay,
+                  $lte: endOfDay,
+                },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  productId: "$_id",
+                  warehouseId: "$warehouse._id",
+                  rackId: "$rack._id",
+                },
+                productName: { $first: "$name" },
+                warehouseName: { $first: "$warehouse.name" },
+                rackName: { $first: "$rack.name" },
+                quantity: { $sum: 1 },
+              },
+            },
+          {
+          $project: {
+          _id: 0, // ❌ remove _id
+          productName: 1,
+          warehouseName: 1,
+          rackName: 1,
+          quantity: 1,
+          },
+          },
+            {
+              $addFields: {
+                type: "added",
+              },
+            },
+          ],
+
+          // ✅ SOLD TODAY (using outStockDate)
+          sold: [
+            {
+              $match: {
+                "items.outStockDate": {
+                  $ne: null,
+                  $gte: startOfDay,
+                  $lte: endOfDay,
+                },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  productId: "$_id",
+                  warehouseId: "$warehouse._id",
+                  rackId: "$rack._id",
+                },
+                productName: { $first: "$name" },
+                warehouseName: { $first: "$warehouse.name" },
+                rackName: { $first: "$rack.name" },
+                quantity: { $sum: 1 },
+              },
+            },
+          {
+          $project: {
+          _id: 0, // ❌ remove _id
+          productName: 1,
+          warehouseName: 1,
+          rackName: 1,
+          quantity: 1,
+          },
+          },
+            {
+              $addFields: {
+                type: "sold",
+              },
+            },
+          ],
+        },
+      },
+
+      // 🔗 merge both arrays
+      {
+        $project: {
+          data: { $concatArrays: ["$added", "$sold"] },
+        },
+      },
+
+      { $unwind: "$data" },
+      { $replaceRoot: { newRoot: "$data" } },
+
+      // 🔥 sorting (highest activity first)
+      {
+        $sort: { quantity: -1 },
+      },
+
+      // 📄 pagination
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limit }],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ]);
+
+    const data = result[0]?.data || [];
+    const total = result[0]?.totalCount[0]?.count || 0;
+
+    return c.json({
+      success: true,
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      500
+    );
+  }
+};

@@ -330,7 +330,6 @@ export const markProductAsSold = async (c: Context) => {
     return c.json({
       success: true,
       message: "Product marked as sold",
-      data: item,
     });
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
