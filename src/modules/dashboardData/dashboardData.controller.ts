@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import ProductItem from "../product/productItem.model";
 import Product from "../product/product.model";
+import Category from "../category/category.model";
 
 
 //  total stock counts for dashboard
@@ -161,6 +162,102 @@ export const getStockMovementMonthWise = async (c: Context) => {
       success: true,
       year,
       data: finalData,
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+//  get category distribution for dashboard
+
+export const getCategoryDistribution = async (c: Context) => {
+  try {
+    const result = await Category.aggregate([
+      // ✅ LEFT JOIN with ProductItem
+      {
+        $lookup: {
+          from: "productitems",
+          let: { categoryId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$categoryId", "$$categoryId"] },
+                status: "available",
+              },
+            },
+          ],
+          as: "items",
+        },
+      },
+
+      // ✅ count available items per category
+      {
+        $addFields: {
+          count: { $size: "$items" },
+        },
+      },
+
+      // ✅ total calculation
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$count" },
+          categories: {
+            $push: {
+              name: "$name",
+              count: "$count",
+            },
+          },
+        },
+      },
+
+      // ✅ unwind for %
+      { $unwind: "$categories" },
+
+      // ✅ percentage calculation
+      {
+        $addFields: {
+          "categories.percentage": {
+            $cond: [
+              { $eq: ["$total", 0] },
+              0,
+              {
+                $multiply: [
+                  { $divide: ["$categories.count", "$total"] },
+                  100,
+                ],
+              },
+            ],
+          },
+        },
+      },
+
+      // ✅ final format
+      {
+        $group: {
+          _id: null,
+          total: { $first: "$total" },
+          data: {
+            $push: {
+              name: "$categories.name",
+              count: "$categories.count",
+              percentage: {
+                $round: ["$categories.percentage", 2],
+              },
+            },
+          },
+        },
+      },
+    ]);
+
+    const response = result[0] || {
+      total: 0,
+      data: [],
+    };
+
+    return c.json({
+      success: true,
+      ...response,
     });
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
