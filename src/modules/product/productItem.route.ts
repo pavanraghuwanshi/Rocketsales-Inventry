@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { verifyToken } from "../../middleware/auth.middleware";
 
-import { addProductItems, getProductItems, getProductItemsByRack, markProductAsSold, uploadProductItemsExcel } from "./productItem.controller";
+import { addProductItems, getProductByBarcodeDetailed, getProductItems, getProductItemsByRack, markProductAsSold, uploadProductItemsExcel } from "./productItem.controller";
 
 const productItemRoutes = new Hono();
 
@@ -13,6 +13,7 @@ productItemRoutes.get("/rack-wise", getProductItemsByRack);
 productItemRoutes.post("/upload-excel", uploadProductItemsExcel);
 
 productItemRoutes.put("/sold-stock", markProductAsSold);
+productItemRoutes.get("/verify-stock", getProductByBarcodeDetailed);
 
 
 export default productItemRoutes;

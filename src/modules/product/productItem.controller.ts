@@ -335,3 +335,61 @@ export const markProductAsSold = async (c: Context) => {
     return c.json({ success: false, message: error.message }, 500);
   }
 };
+
+
+// Verify product item by barcode number
+
+export const getProductByBarcodeDetailed = async (c: Context) => {
+  try {
+    const barcodeNumber = c.req.query("barcodeNumber");
+    const user = c.get("user");
+
+    if (!barcodeNumber) {
+      return c.json(
+        { success: false, message: "barcodeNumber is required" },
+        400
+      );
+    }
+
+    // ✅ role-based adminId
+    let adminId;
+
+    if (user.role === "superadmin") {
+      adminId = c.req.query("adminId") || user.id;
+    } else if (user.role === "admin") {
+      adminId = user.id;
+    } else {
+      adminId = user.adminId;
+    }
+
+    // ✅ find + populate (only name)
+    const item = await ProductItem.findOne({
+      barcodeNumber,
+      adminId,
+    })
+      .populate({ path: "productId", select: "name" })
+      .populate({ path: "categoryId", select: "name" })
+      .populate({ path: "warehouseId", select: "name" })
+      .populate({ path: "brandId", select: "name" })
+      .populate({ path: "supplierId", select: "name" })
+      .populate({ path: "rackId", select: "name" })
+      .lean();
+
+    if (!item) {
+      return c.json(
+        { success: false, message: "Product item not found" },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: item,
+    });
+  } catch (error: any) {
+    return c.json(
+      { success: false, message: error.message },
+      500
+    );
+  }
+};
