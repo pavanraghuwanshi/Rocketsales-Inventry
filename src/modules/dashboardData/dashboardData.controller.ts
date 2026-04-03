@@ -11,11 +11,16 @@ export const getStockCounts = async (c: Context) => {
     const rackId = c.req.query("rackId");
     const warehouseId = c.req.query("warehouseId");
 
+    const roleFilter = getRoleFilter(c, "adminId");
+
     const itemMatch: any = {};
     if (rackId) itemMatch.rackId = rackId;
     if (warehouseId) itemMatch.warehouseId = warehouseId;
 
     const result = await Product.aggregate([
+       {
+     $match: roleFilter
+     },
       // ✅ join with product items
       {
         $lookup: {
@@ -97,6 +102,7 @@ export const getStockCounts = async (c: Context) => {
 export const getStockMovementMonthWise = async (c: Context) => {
   try {
     const { year } = c.req.query();
+    const roleFilter = getRoleFilter(c, "adminId");
 
     if (!year) {
       return c.json({ success: false, message: "year is required" }, 400);
@@ -106,6 +112,9 @@ export const getStockMovementMonthWise = async (c: Context) => {
     const endDate = new Date(`${year}-12-31T23:59:59.999Z`);
 
     const result = await ProductItem.aggregate([
+       {
+     $match: roleFilter
+     },    
       {
         $facet: {
           // ✅ INBOUND (createdAt)
@@ -174,10 +183,13 @@ export const getStockMovementMonthWise = async (c: Context) => {
 export const getCategoryDistribution = async (c: Context) => {
   try {
 
-        const roleFilter = getRoleFilter(c, "adminId");
+     const roleFilter = getRoleFilter(c, "adminId");
 
     const result = await Category.aggregate([
       // ✅ LEFT JOIN with ProductItem
+        {
+     $match: roleFilter
+     },
       {
         $lookup: {
           from: "productitems",
