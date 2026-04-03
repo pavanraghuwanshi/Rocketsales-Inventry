@@ -267,10 +267,18 @@ export const getCategoryDistribution = async (c: Context) => {
       },
     ]);
 
-    const response = result[0] || {
-      total: 0,
-      data: [],
-    };
+     const response = result.length
+     ? result[0]
+     : {
+          total: 0,
+          data: await Category.find(roleFilter).select("name").lean().then(cats =>
+          cats.map(c => ({
+               name: c.name,
+               count: 0,
+               percentage: 0,
+          }))
+          ),
+     };
 
     return c.json({
       success: true,
