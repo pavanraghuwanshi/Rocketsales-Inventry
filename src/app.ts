@@ -48,6 +48,8 @@ app.route("/api/dashboard", dashboardDataRoutes);
 
 //    product route
 app.route("/api/products", productRoutes);
+
+//   product item route
 app.route("/api/product-items", productItemRoutes);
 
 
