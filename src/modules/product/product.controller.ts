@@ -135,9 +135,9 @@ export const createProduct = async (c: Context) => {
       );
     }
 
-    if (!name || !price) {
+    if (!name) {
       return c.json(
-        { success: false, message: "name and price required for new product" },
+        { success: false, message: "name is required for new product" },
         400
       );
     }
