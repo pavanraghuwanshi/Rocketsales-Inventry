@@ -12,6 +12,8 @@ export interface IProductItem extends Document {
   adminId: mongoose.Types.ObjectId;
   status: "available" | "sold" | "damaged";
   outStockDate?: Date;
+  purchasePrice: number;
+  sellingPrice: number;
 }
 
 const productItemSchema = new Schema<IProductItem>(
@@ -64,7 +66,12 @@ const productItemSchema = new Schema<IProductItem>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-
+    purchasePrice: {
+      type: Number,
+    },
+    sellingPrice: {
+      type: Number,
+    },
     status: {
       type: String,
       enum: ["available", "sold", "damaged"],
