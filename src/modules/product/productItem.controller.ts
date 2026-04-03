@@ -17,7 +17,7 @@ export const addProductItems = async (c: Context) => {
     const body = await c.req.json();
     const user = c.get("user");
 
-    const { productId, warehouseId, rackId, barcodes,supplierId, adminId,outDate } = body;
+    const { productId, warehouseId, rackId, barcodes,supplierId, adminId } = body;
 
     // ✅ validations
     if (!productId || !warehouseId || !rackId || !barcodes || !Array.isArray(barcodes) || barcodes.length === 0) {
@@ -116,10 +116,13 @@ export const getProductItems = async (c: Context) => {
 
     return c.json({
       success: true,
-      page,
-      totalPages: Math.ceil(total / limit),
-      totalItems: total,
-      items,
+      data: items,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
@@ -262,6 +265,63 @@ const data: any[] = XLSX.utils.sheet_to_json(sheet);
       success: true,
       inserted: productItems.length,
       message: "Excel data uploaded successfully",
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+
+//  mark product item as sold or damaged
+
+export const markProductAsSold = async (c: Context) => {
+  try {
+    const body = await c.req.json();
+    const user = c.get("user");
+
+    const { barcodeNumber } = body;
+
+    if (!barcodeNumber) {
+      return c.json(
+        { success: false, message: "barcodeNumber is required" },
+        400
+      );
+    }
+
+    const adminId =
+      user.role === "superadmin" ? body.adminId || user.id : user.id;
+
+    // ✅ find product item using barcode + adminId
+    const item = await ProductItem.findOne({
+      barcodeNumber,
+      adminId,
+    });
+
+    if (!item) {
+      return c.json(
+        { success: false, message: "Product item not found" },
+        404
+      );
+    }
+
+    // ✅ check if already sold
+    if (item.status === "sold") {
+      return c.json(
+        { success: false, message: "Item already sold" },
+        400
+      );
+    }
+
+    // ✅ update status
+    item.status = "sold";
+    item.outStockDate = new Date();
+
+    await item.save();
+
+    return c.json({
+      success: true,
+      message: "Product marked as sold",
+      data: item,
     });
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
