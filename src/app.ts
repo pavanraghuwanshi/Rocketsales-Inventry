@@ -7,6 +7,7 @@ import supplierRoutes from "./modules/supplier/supplier.route";
 import productRoutes from "./modules/product/product.route";
 import warehouseRoutes from "./modules/warehouseAndRack/warehouse.route";
 import productItemRoutes from "./modules/product/productItem.route";
+import dashboardDataRoutes from "./modules/dashboardData/dashboardData.route";
 
 const app = new Hono();
 
@@ -40,6 +41,9 @@ app.route("/api/suppliers", supplierRoutes);
 
 //   warehouse route
 app.route("/api/warehouses", warehouseRoutes);
+
+//  dashboard data route
+app.route("/api/dashboard", dashboardDataRoutes);
 
 
 //    product route
