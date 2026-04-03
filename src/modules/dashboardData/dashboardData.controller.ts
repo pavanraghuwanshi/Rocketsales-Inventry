@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import ProductItem from "../product/productItem.model";
 import Product from "../product/product.model";
 import Category from "../category/category.model";
+import { getRoleFilter } from "../../utils/roleFilteration";
 
 
 //  total stock counts for dashboard
@@ -172,6 +173,9 @@ export const getStockMovementMonthWise = async (c: Context) => {
 
 export const getCategoryDistribution = async (c: Context) => {
   try {
+
+        const roleFilter = getRoleFilter(c, "adminId");
+
     const result = await Category.aggregate([
       // ✅ LEFT JOIN with ProductItem
       {
@@ -183,6 +187,7 @@ export const getCategoryDistribution = async (c: Context) => {
               $match: {
                 $expr: { $eq: ["$categoryId", "$$categoryId"] },
                 status: "available",
+                 ...roleFilter, 
               },
             },
           ],
@@ -274,6 +279,8 @@ export const getProductAging = async (c: Context) => {
     const limit = parseInt(c.req.query("limit") || "10");
     const skip = (page - 1) * limit;
 
+    const roleFilter = getRoleFilter(c, "adminId");
+
     const itemMatch: any = {
       status: "available",
     };
@@ -282,12 +289,12 @@ export const getProductAging = async (c: Context) => {
     if (warehouseId) itemMatch.warehouseId = warehouseId;
 
     const result = await Product.aggregate([
-      {
-        $match: search
-          ? { name: { $regex: search, $options: "i" } }
-          : {},
-      },
-
+     {
+     $match: {
+     ...roleFilter,
+     ...(search && { name: { $regex: search, $options: "i" } }),
+     },
+     },
       // 🔗 join productItems
       {
         $lookup: {
@@ -298,6 +305,7 @@ export const getProductAging = async (c: Context) => {
               $match: {
                 $expr: { $eq: ["$productId", "$$productId"] },
                 ...itemMatch,
+                ...roleFilter,
               },
             },
           ],
@@ -417,6 +425,8 @@ export const getTodayActivity = async (c: Context) => {
     const limit = parseInt(c.req.query("limit") || "10");
     const skip = (page - 1) * limit;
 
+     const roleFilter = getRoleFilter(c, "adminId");
+
     // 📅 Today range
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -431,9 +441,10 @@ export const getTodayActivity = async (c: Context) => {
     const result = await Product.aggregate([
       // 🔍 search
       {
-        $match: search
-          ? { name: { $regex: search, $options: "i" } }
-          : {},
+     $match: {
+     ...roleFilter,
+     ...(search && { name: { $regex: search, $options: "i" } }),
+     },
       },
 
       // 🔗 productItems join
@@ -446,6 +457,7 @@ export const getTodayActivity = async (c: Context) => {
               $match: {
                 $expr: { $eq: ["$productId", "$$productId"] },
                 ...itemMatch,
+                ...roleFilter,
               },
             },
           ],
