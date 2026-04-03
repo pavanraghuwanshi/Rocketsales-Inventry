@@ -17,7 +17,7 @@ export const addProductItems = async (c: Context) => {
     const body = await c.req.json();
     const user = c.get("user");
 
-    const { productId, warehouseId, rackId, barcodes,supplierId, adminId } = body;
+    const { productId, warehouseId, rackId, barcodes,supplierId, adminId,outDate } = body;
 
     // ✅ validations
     if (!productId || !warehouseId || !rackId || !barcodes || !Array.isArray(barcodes) || barcodes.length === 0) {

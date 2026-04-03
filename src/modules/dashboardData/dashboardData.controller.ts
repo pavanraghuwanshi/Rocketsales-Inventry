@@ -1,52 +1,166 @@
 import type { Context } from "hono";
 import ProductItem from "../product/productItem.model";
+import Product from "../product/product.model";
 
 
-
+//  total stock counts for dashboard
 export const getStockCounts = async (c: Context) => {
   try {
     const rackId = c.req.query("rackId");
     const warehouseId = c.req.query("warehouseId");
 
-    // optional filters
-    const match: any = {};
+    const itemMatch: any = {};
+    if (rackId) itemMatch.rackId = rackId;
+    if (warehouseId) itemMatch.warehouseId = warehouseId;
 
-    if (rackId) match.rackId = rackId;
-    if (warehouseId) match.warehouseId = warehouseId;
-
-    const result = await ProductItem.aggregate([
+    const result = await Product.aggregate([
+      // ✅ join with product items
       {
-        $match: match,
+        $lookup: {
+          from: "productitems", // collection name (IMPORTANT: check exact name)
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$productId", "$$productId"] },
+                ...itemMatch,
+              },
+            },
+          ],
+          as: "items",
+        },
       },
+
+      // ✅ calculate counts per product
+      {
+        $addFields: {
+          availableCount: {
+            $size: {
+              $filter: {
+                input: "$items",
+                as: "item",
+                cond: { $eq: ["$$item.status", "available"] },
+              },
+            },
+          },
+          soldCount: {
+            $size: {
+              $filter: {
+                input: "$items",
+                as: "item",
+                cond: { $eq: ["$$item.status", "sold"] },
+              },
+            },
+          },
+        },
+      },
+
+      // ✅ final grouping
       {
         $group: {
           _id: null,
-          availableStock: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "available"] }, 1, 0],
-            },
-          },
+
+          availableStock: { $sum: "$availableCount" },
+          soldStock: { $sum: "$soldCount" },
+
+          // ✅ REAL outOfStock (product level)
           outOfStock: {
             $sum: {
-              $cond: [{ $eq: ["$status", "sold"] }, 1, 0],
+              $cond: [{ $eq: ["$availableCount", 0] }, 1, 0],
             },
           },
 
-          totalItems: { $sum: 1 },
+          totalProducts: { $sum: 1 },
         },
       },
     ]);
 
     const counts = result[0] || {
       availableStock: 0,
+      soldStock: 0,
       outOfStock: 0,
-      inStock: 0,
-      totalItems: 0,
+      totalProducts: 0,
     };
 
     return c.json({
       success: true,
       data: counts,
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+//  total stock counts with date filter for dashboard
+export const getStockMovementMonthWise = async (c: Context) => {
+  try {
+    const { year } = c.req.query();
+
+    if (!year) {
+      return c.json({ success: false, message: "year is required" }, 400);
+    }
+
+    const startDate = new Date(`${year}-01-01`);
+    const endDate = new Date(`${year}-12-31T23:59:59.999Z`);
+
+    const result = await ProductItem.aggregate([
+      {
+        $facet: {
+          // ✅ INBOUND (createdAt)
+          inbound: [
+            {
+              $match: {
+                createdAt: { $gte: startDate, $lte: endDate },
+              },
+            },
+            {
+              $group: {
+                _id: { $month: "$createdAt" },
+                count: { $sum: 1 },
+              },
+            },
+          ],
+
+          // ✅ OUTBOUND (outStockDate + sold)
+          outbound: [
+            {
+              $match: {
+                status: "sold",
+                outStockDate: { $gte: startDate, $lte: endDate },
+              },
+            },
+            {
+              $group: {
+                _id: { $month: "$outStockDate" },
+                count: { $sum: 1 },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const inbound = result[0]?.inbound || [];
+    const outbound = result[0]?.outbound || [];
+
+    // ✅ merge both into month-wise format (1–12)
+    const finalData = [];
+
+    for (let i = 1; i <= 12; i++) {
+      const inData = inbound.find((x: any) => x._id === i);
+      const outData = outbound.find((x: any) => x._id === i);
+
+      finalData.push({
+        month: i,
+        inbound: inData ? inData.count : 0,
+        outbound: outData ? outData.count : 0,
+      });
+    }
+
+    return c.json({
+      success: true,
+      year,
+      data: finalData,
     });
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);

@@ -11,6 +11,7 @@ export interface IProductItem extends Document {
   skuNumber: string;
   adminId: mongoose.Types.ObjectId;
   status: "available" | "sold" | "damaged";
+  outStockDate?: Date;
 }
 
 const productItemSchema = new Schema<IProductItem>(
@@ -51,7 +52,9 @@ const productItemSchema = new Schema<IProductItem>(
       required: true,
       unique: true, // 🔥 must
     },
-
+    outStockDate: {
+      type: Date,
+    },
     skuNumber: {
       type: String,
       required: true,
