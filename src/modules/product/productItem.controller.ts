@@ -168,8 +168,10 @@ export const getProductItemsByRack = async (c: Context) => {
         ],
       })
       .populate("warehouseId", "name location") // populate warehouse fields
+      .populate("supplierId", "name phone email") // populate supplier fields
       .populate("rackId", "name capacity") // populate rack fields
       .sort({ createdAt: -1 })
+      .select("-__v -categoryId -brandId")
       .skip(skip)
       .limit(limit);
 
