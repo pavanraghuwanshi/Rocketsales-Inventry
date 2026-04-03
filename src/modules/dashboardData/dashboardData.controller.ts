@@ -263,3 +263,144 @@ export const getCategoryDistribution = async (c: Context) => {
     return c.json({ success: false, message: error.message }, 500);
   }
 };
+
+//  get product aging information for dashboard
+export const getProductAging = async (c: Context) => {
+  try {
+    const rackId = c.req.query("rackId");
+    const warehouseId = c.req.query("warehouseId");
+    const search = c.req.query("search") || "";
+    const page = parseInt(c.req.query("page") || "1");
+    const limit = parseInt(c.req.query("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const itemMatch: any = {
+      status: "available",
+    };
+
+    if (rackId) itemMatch.rackId = rackId;
+    if (warehouseId) itemMatch.warehouseId = warehouseId;
+
+    const result = await Product.aggregate([
+      {
+        $match: search
+          ? { name: { $regex: search, $options: "i" } }
+          : {},
+      },
+
+      // 🔗 join productItems
+      {
+        $lookup: {
+          from: "productitems",
+          let: { productId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$productId", "$$productId"] },
+                ...itemMatch,
+              },
+            },
+          ],
+          as: "items",
+        },
+      },
+
+      { $unwind: "$items" },
+
+      // 🔗 rack
+      {
+        $lookup: {
+          from: "racks",
+          localField: "items.rackId",
+          foreignField: "_id",
+          as: "rack",
+        },
+      },
+      { $unwind: { path: "$rack", preserveNullAndEmptyArrays: true } },
+
+      // 🔗 warehouse
+      {
+        $lookup: {
+          from: "warehouses",
+          localField: "items.warehouseId",
+          foreignField: "_id",
+          as: "warehouse",
+        },
+      },
+      { $unwind: { path: "$warehouse", preserveNullAndEmptyArrays: true } },
+
+      // 🧠 MAIN CHANGE 👉 grouping per location
+      {
+        $group: {
+          _id: {
+            productId: "$_id",
+            warehouseId: "$warehouse._id",
+            rackId: "$rack._id",
+          },
+
+          productName: { $first: "$name" },
+          warehouseName: { $first: "$warehouse.name" },
+          rackName: { $first: "$rack.name" },
+
+          count: { $sum: 1 },
+          oldestItemDate: { $min: "$items.createdAt" },
+        },
+      },
+
+      // ⏳ aging per location
+      {
+        $addFields: {
+          agingDays: {
+            $floor: {
+              $divide: [
+                { $subtract: [new Date(), "$oldestItemDate"] },
+                1000 * 60 * 60 * 24,
+              ],
+            },
+          },
+        },
+      },
+
+      {
+        $project: {
+          _id: 0,
+          productName: 1,
+          warehouseName: 1,
+          rackName: 1,
+          count: 1,
+          agingDays: 1,
+          oldestItemDate: 1,
+        },
+      },
+
+      // 🔥 oldest stock first (important)
+      {
+        $sort: { oldestItemDate: 1 },
+      },
+
+      // 📄 pagination
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limit }],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ]);
+
+    const data = result[0]?.data || [];
+    const total = result[0]?.totalCount[0]?.count || 0;
+
+    return c.json({
+      success: true,
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
