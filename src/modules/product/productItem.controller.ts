@@ -371,7 +371,7 @@ export const getProductByBarcodeDetailed = async (c: Context) => {
       .populate({ path: "categoryId", select: "name" })
       .populate({ path: "warehouseId", select: "name" })
       .populate({ path: "brandId", select: "name" })
-      .populate({ path: "supplierId", select: "name" })
+      .populate({ path: "supplierId", select: "name phone" })
       .populate({ path: "rackId", select: "name" })
       .lean();
 
