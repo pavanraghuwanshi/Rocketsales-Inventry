@@ -3,6 +3,7 @@ import ProductItem from "../product/productItem.model";
 import Product from "../product/product.model";
 import Category from "../category/category.model";
 import { getRoleFilter } from "../../utils/roleFilteration";
+import mongoose from "mongoose";
 
 
 //  total stock counts for dashboard
@@ -11,16 +12,19 @@ export const getStockCounts = async (c: Context) => {
     const rackId = c.req.query("rackId");
     const warehouseId = c.req.query("warehouseId");
 
-    const roleFilter = getRoleFilter(c, "adminId");
+    const roleFilter = getRoleFilter(c, "adminId") as { adminId?: string };;
+
 
     const itemMatch: any = {};
     if (rackId) itemMatch.rackId = rackId;
     if (warehouseId) itemMatch.warehouseId = warehouseId;
 
     const result = await Product.aggregate([
-       {
-     $match: roleFilter
-     },
+    {
+        $match: roleFilter?.adminId
+          ? { adminId: new mongoose.Types.ObjectId(roleFilter.adminId) }
+          : {}
+      },
       // ✅ join with product items
       {
         $lookup: {
@@ -102,7 +106,7 @@ export const getStockCounts = async (c: Context) => {
 export const getStockMovementMonthWise = async (c: Context) => {
   try {
     const { year } = c.req.query();
-    const roleFilter = getRoleFilter(c, "adminId");
+    const roleFilter = getRoleFilter(c, "adminId") as { adminId?: string };;
 
     if (!year) {
       return c.json({ success: false, message: "year is required" }, 400);
@@ -112,9 +116,11 @@ export const getStockMovementMonthWise = async (c: Context) => {
     const endDate = new Date(`${year}-12-31T23:59:59.999Z`);
 
     const result = await ProductItem.aggregate([
-       {
-     $match: roleFilter
-     },    
+    {
+        $match: roleFilter?.adminId
+          ? { adminId: new mongoose.Types.ObjectId(roleFilter.adminId) }
+          : {}
+      },   
       {
         $facet: {
           // ✅ INBOUND (createdAt)
@@ -183,13 +189,24 @@ export const getStockMovementMonthWise = async (c: Context) => {
 export const getCategoryDistribution = async (c: Context) => {
   try {
 
-     const roleFilter = getRoleFilter(c, "adminId");
+    const roleFilter = getRoleFilter(c, "adminId") as { adminId?: string };
+
+
+      let extraMatch = {};
+
+      if (roleFilter.adminId) {
+        extraMatch = {
+          adminId: new mongoose.Types.ObjectId(roleFilter.adminId),
+        };
+      }
 
     const result = await Category.aggregate([
       // ✅ LEFT JOIN with ProductItem
-        {
-     $match: roleFilter
-     },
+    {
+        $match: roleFilter?.adminId
+          ? { adminId: new mongoose.Types.ObjectId(roleFilter.adminId) }
+          : {}
+      },
       {
         $lookup: {
           from: "productitems",
@@ -199,7 +216,7 @@ export const getCategoryDistribution = async (c: Context) => {
               $match: {
                 $expr: { $eq: ["$categoryId", "$$categoryId"] },
                 status: "available",
-                 ...roleFilter, 
+                 ...extraMatch, 
               },
             },
           ],
@@ -299,7 +316,15 @@ export const getProductAging = async (c: Context) => {
     const limit = parseInt(c.req.query("limit") || "10");
     const skip = (page - 1) * limit;
 
-    const roleFilter = getRoleFilter(c, "adminId");
+    const roleFilter = getRoleFilter(c, "adminId") as { adminId?: string };
+
+    let extraMatch = {};
+
+      if (roleFilter.adminId) {
+        extraMatch = {
+          adminId: new mongoose.Types.ObjectId(roleFilter.adminId),
+        };
+      }
 
     const itemMatch: any = {
       status: "available",
@@ -311,7 +336,7 @@ export const getProductAging = async (c: Context) => {
     const result = await Product.aggregate([
      {
      $match: {
-     ...roleFilter,
+     ...extraMatch,
      ...(search && { name: { $regex: search, $options: "i" } }),
      },
      },
@@ -325,7 +350,7 @@ export const getProductAging = async (c: Context) => {
               $match: {
                 $expr: { $eq: ["$productId", "$$productId"] },
                 ...itemMatch,
-                ...roleFilter,
+                ...extraMatch,
               },
             },
           ],
@@ -445,7 +470,15 @@ export const getTodayActivity = async (c: Context) => {
     const limit = parseInt(c.req.query("limit") || "10");
     const skip = (page - 1) * limit;
 
-     const roleFilter = getRoleFilter(c, "adminId");
+     const roleFilter = getRoleFilter(c, "adminId") as { adminId?: string };
+
+    let extraMatch = {};
+
+      if (roleFilter.adminId) {
+        extraMatch = {
+          adminId: new mongoose.Types.ObjectId(roleFilter.adminId),
+        };
+      }
 
     // 📅 Today range
     const startOfDay = new Date();
@@ -462,7 +495,7 @@ export const getTodayActivity = async (c: Context) => {
       // 🔍 search
       {
      $match: {
-     ...roleFilter,
+     ...extraMatch,
      ...(search && { name: { $regex: search, $options: "i" } }),
      },
       },
@@ -477,7 +510,7 @@ export const getTodayActivity = async (c: Context) => {
               $match: {
                 $expr: { $eq: ["$productId", "$$productId"] },
                 ...itemMatch,
-                ...roleFilter,
+                ...extraMatch,
               },
             },
           ],
