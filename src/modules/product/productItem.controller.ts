@@ -182,12 +182,11 @@ export const addProductItemsByExcel = async (c: Context) => {
     for (const row of rows) {
       const clean = normalize(row);
 
-      const productName = clean.productname;
-      const barcode = clean.barcode;
-
-      const brandName = clean.brandname;
-      const categoryName = clean.categoryname;
-      const supplierName = clean.suppliername;
+      const productName = clean.productname?.toString().trim();
+      const barcode = clean.barcode?.toString().trim();
+      const brandName = clean.brandname?.toString().trim();
+      const categoryName = clean.categoryname?.toString().trim();
+      const supplierName = clean.suppliername?.toString().trim();
 
       const purchasePrice = clean.purchaseprice;
       const sellingPrice = clean.sellingprice;
