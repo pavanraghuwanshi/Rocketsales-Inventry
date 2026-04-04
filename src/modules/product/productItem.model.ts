@@ -26,7 +26,6 @@ const productItemSchema = new Schema<IProductItem>(
     categoryId: {
       type: Schema.Types.ObjectId,
       ref: "Category",
-      required: true,
     },
     warehouseId: {
       type: Schema.Types.ObjectId,
@@ -41,7 +40,6 @@ const productItemSchema = new Schema<IProductItem>(
     supplierId: {
       type: Schema.Types.ObjectId,
       ref: "Supplier",
-      required: true,
     },
     rackId: {
       type: Schema.Types.ObjectId,

@@ -1,6 +1,9 @@
 import type { Context } from "hono";
 import { getBulkBarcodes } from "../../utils/barcode";
 import Product from "./product.model";
+import Category from "../category/category.model";
+import Brand from "../brands/brand.model";
+import Supplier from "../supplier/supplier.model";
 import ProductItem from "./productItem.model";
 import * as XLSX from "xlsx";
 import brandModel from "../brands/brand.model";
@@ -77,6 +80,179 @@ export const addProductItems = async (c: Context) => {
     return c.json({ success: false, message: error.message }, 500);
   }
 };
+
+
+
+//  get product items by excel 
+
+export const addProductItemsByExcel = async (c: Context) => {
+  try {
+    const user = c.get("user");
+
+    const formData = await c.req.formData();
+    const file = formData.get("file") as File;
+
+    const warehouseId = formData.get("warehouseId");
+    const rackId = formData.get("rackId");
+
+    if (!file) {
+      return c.json({ success: false, message: "Excel file required" }, 400);
+    }
+
+    if (!warehouseId || !rackId) {
+      return c.json(
+        { success: false, message: "warehouseId & rackId required" },
+        400
+      );
+    }
+
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+
+    const sheetName = workbook.SheetNames?.[0];
+    const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+
+    if (!sheet) {
+      return c.json({ success: false, message: "Invalid Excel sheet" }, 400);
+    }
+
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+    if (!rows.length) {
+      return c.json({ success: false, message: "Empty Excel" }, 400);
+    }
+
+    // ✅ normalize
+    const normalize = (obj: any) => {
+      const o: any = {};
+      for (let k in obj) o[k.trim().toLowerCase()] = obj[k];
+      return o;
+    };
+
+    // ✅ header validation (ONLY REQUIRED)
+    const requiredHeaders = ["productname", "barcode"];
+
+    const firstRow = normalize(rows[0]);
+    const excelHeaders = Object.keys(firstRow);
+
+    const missingHeaders = requiredHeaders.filter(
+      (h) => !excelHeaders.includes(h)
+    );
+
+    if (missingHeaders.length > 0) {
+      return c.json({
+        success: false,
+        message: "Invalid Excel format",
+        missingHeaders,
+      }, 400);
+    }
+
+    const finalAdminId = user.id;
+
+    // ================= 🚀 BULK FETCH =================
+
+    const productNames = rows.map(r => normalize(r).productname);
+    const barcodes = rows.map(r => normalize(r).barcode);
+
+    const [products, brands, categories, suppliers, existingItems] =
+      await Promise.all([
+        Product.find({ name: { $in: productNames } }),
+        Brand.find(),
+        Category.find(),
+        Supplier.find(),
+        ProductItem.find({ barcodeNumber: { $in: barcodes } }).select("barcodeNumber"),
+      ]);
+
+    // ✅ maps (O(1))
+    const productMap = new Map(products.map(p => [p.name, p]));
+    const brandMap = new Map(brands.map(b => [b.name, b._id]));
+    const categoryMap = new Map(categories.map(c => [c.name, c._id]));
+    const supplierMap = new Map(suppliers.map(s => [s.name, s._id]));
+
+    const existingBarcodeSet = new Set(
+      existingItems.map(i => i.barcodeNumber)
+    );
+
+    const validItems: any[] = [];
+    const errorItems: any[] = [];
+
+    // ================= 🚀 PROCESS =================
+
+    for (const row of rows) {
+      const clean = normalize(row);
+
+      const productName = clean.productname;
+      const barcode = clean.barcode;
+
+      const brandName = clean.brandname;
+      const categoryName = clean.categoryname;
+      const supplierName = clean.suppliername;
+
+      const purchasePrice = clean.purchaseprice;
+      const sellingPrice = clean.sellingprice;
+
+      // ❌ required check
+      if (!productName || !barcode) {
+        errorItems.push({ ...row, error: "productName & barcode required" });
+        continue;
+      }
+
+      // ❌ duplicate barcode
+      if (existingBarcodeSet.has(barcode)) {
+        errorItems.push({ ...row, error: "Duplicate barcode" });
+        continue;
+      }
+
+      const product = productMap.get(productName);
+      if (!product) {
+        errorItems.push({ ...row, error: "Product not found" });
+        continue;
+      }
+
+      // ✅ optional mapping (NO ERROR)
+      const brandId = brandName ? brandMap.get(brandName) : undefined;
+      const categoryId = categoryName ? categoryMap.get(categoryName) : undefined;
+      const supplierId = supplierName ? supplierMap.get(supplierName) : undefined;
+
+      validItems.push({
+        productId: product._id,
+        categoryId: categoryId || product.categoryId,
+        brandId: brandId || product.brandId,
+        ...(supplierId && { supplierId }),
+        warehouseId,
+        rackId,
+        barcodeNumber: barcode,
+        skuNumber: product.skuNumber,
+        adminId: finalAdminId,
+        purchasePrice,
+        sellingPrice,
+      });
+
+      existingBarcodeSet.add(barcode); // avoid duplicate in same file
+    }
+
+    // ✅ insert
+    if (validItems.length > 0) {
+      await ProductItem.insertMany(validItems);
+    }
+
+    return c.json({
+      success: true,
+      insertedCount: validItems.length,
+      errorCount: errorItems.length,
+      errors: errorItems,
+      message: "Fast Excel processed",
+    });
+
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+
+
+
+
 
   //  get product item
 export const getProductItems = async (c: Context) => {

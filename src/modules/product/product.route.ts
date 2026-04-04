@@ -6,6 +6,7 @@ import {
   updateProduct,
   deleteProduct,
   getProductsDropdown,
+  createProductByExcel,
 } from "./product.controller";
 import { verifyToken } from "../../middleware/auth.middleware";
 
@@ -14,6 +15,7 @@ const productRoutes = new Hono();
 productRoutes.use("*", verifyToken);
 
 productRoutes.post("/", createProduct);
+productRoutes.post("/excel", createProductByExcel);
 productRoutes.get("/", getProducts);
 productRoutes.get("/dropdown", getProductsDropdown);
 productRoutes.get("/:id", getProduct);

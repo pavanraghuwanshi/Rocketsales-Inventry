@@ -11,11 +11,11 @@ export interface IProduct extends Document {
 
 const productSchema = new Schema<IProduct>(
   {
-    name: { type: String, required: true },
+    name: { type: String, required: true,unique: true },
     price: { type: Number, },
 
     brandId: { type: Schema.Types.ObjectId, ref: "Brand" },
-    categoryId: { type: Schema.Types.ObjectId, ref: "Category", required: true },
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category", },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     skuNumber: { type: String, required: true }
   },

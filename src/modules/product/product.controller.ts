@@ -5,7 +5,8 @@ import Category from "../category/category.model";
 import { z } from "zod";
 import { getBulkBarcodes } from "../../utils/barcode";
 import mongoose from "mongoose";
-
+import * as XLSX from "xlsx";
+import Brand from "../brands/brand.model";
 
 
 
@@ -171,6 +172,160 @@ export const createProduct = async (c: Context) => {
       data: product,
       message: "Product created successfully",
     });
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500);
+  }
+};
+
+
+// product builk create by excel
+
+export const createProductByExcel = async (c: Context) => {
+  try {
+    const user = c.get("user");
+
+    const formData = await c.req.formData();
+    const file = formData.get("file") as File;
+    const adminId = formData.get("adminId");
+
+    if (!file) {
+      return c.json({ success: false, message: "Excel file required" }, 400);
+    }
+
+    const finalAdminId =
+      user.role === "superadmin" ? adminId || user.id : user.id;
+
+    // ✅ read excel
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+
+    const sheetName = workbook.SheetNames?.[0];
+    const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+
+    if (!sheet) {
+      return c.json({ success: false, message: "Invalid Excel sheet" }, 400);
+    }
+
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+    if (!rows || rows.length === 0) {
+      return c.json({ success: false, message: "Empty Excel" }, 400);
+    }
+
+    // ✅ normalize
+    const normalizeKeys = (obj: any) => {
+      const newObj: any = {};
+      for (let key in obj) {
+        newObj[key.trim().toLowerCase()] = obj[key];
+      }
+      return newObj;
+    };
+
+    // ✅ header validation
+    const requiredHeaders = ["name", "skunumber"];
+
+    const firstRow = normalizeKeys(rows[0]);
+    const excelHeaders = Object.keys(firstRow);
+
+    const missingHeaders = requiredHeaders.filter(
+      (h) => !excelHeaders.includes(h)
+    );
+
+    if (missingHeaders.length > 0) {
+      return c.json({
+        success: false,
+        message: "Invalid Excel format. Please fix headers.",
+        missingHeaders,
+        expectedFormat: requiredHeaders,
+        receivedHeaders: excelHeaders,
+      }, 400);
+    }
+
+    // ✅ pre-fetch brand & category
+    const allBrands = await Brand.find().select("_id name");
+    const allCategories = await Category.find().select("_id name");
+
+    const brandMap = new Map(
+      allBrands.map((b) => [b.name.toLowerCase(), b._id])
+    );
+
+    const categoryMap = new Map(
+      allCategories.map((c) => [c.name.toLowerCase(), c._id])
+    );
+
+    // ✅ existing SKU check
+    const skus = rows.map((r) => normalizeKeys(r).skunumber);
+
+    const existingProducts = await Product.find({
+      skuNumber: { $in: skus },
+    }).select("skuNumber");
+
+    const existingSkuSet = new Set(
+      existingProducts.map((p) => p.skuNumber)
+    );
+
+    const validProducts: any[] = [];
+    const errorProducts: any[] = [];
+
+    for (const row of rows) {
+      const cleanRow = normalizeKeys(row);
+
+      const name = cleanRow.name?.toString().trim();
+      const skuNumber = cleanRow.skunumber?.toString().trim();
+      const price = cleanRow.price;
+      const brandName = cleanRow.brandname;
+      const categoryName = cleanRow.categoryname;
+
+      // ❌ required validation
+      if (!name || !skuNumber) {
+        errorProducts.push({ ...row, error: "name & skuNumber are required" });
+        continue;
+      }
+
+      // ❌ duplicate SKU
+      if (existingSkuSet.has(skuNumber)) {
+        errorProducts.push({ ...row, error: "SKU already exists" });
+        continue;
+      }
+
+      // ✅ optional mapping
+      let brandId = undefined;
+      let categoryId = undefined;
+
+      if (brandName) {
+        const foundBrand = brandMap.get(brandName.toLowerCase());
+        if (foundBrand) brandId = foundBrand;
+      }
+
+      if (categoryName) {
+        const foundCategory = categoryMap.get(categoryName.toLowerCase());
+        if (foundCategory) categoryId = foundCategory;
+      }
+
+      validProducts.push({
+        name,
+        skuNumber,
+        price,
+        ...(brandId && { brandId }),
+        ...(categoryId && { categoryId }),
+        adminId: finalAdminId,
+      });
+
+      existingSkuSet.add(skuNumber); // prevent duplicate in same file
+    }
+
+    if (validProducts.length > 0) {
+      await Product.insertMany(validProducts);
+    }
+
+    return c.json({
+      success: true,
+      insertedCount: validProducts.length,
+      errorCount: errorProducts.length,
+      errors: errorProducts,
+      message: "Products uploaded via Excel",
+    });
+
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
   }
