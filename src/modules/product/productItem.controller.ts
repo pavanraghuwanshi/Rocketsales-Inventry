@@ -108,6 +108,7 @@ export const getProductItems = async (c: Context) => {
 
     const items = await ProductItem.find(query)
       .populate("productId", "name skuNumber price brandId supplierId categoryId")
+      .populate("supplierId", "name")
       .populate("warehouseId", "name location")
       .populate("rackId", "name capacity")
       .sort({ createdAt: -1 })
