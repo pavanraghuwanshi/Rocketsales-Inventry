@@ -8,6 +8,7 @@ import ProductItem from "./productItem.model";
 import * as XLSX from "xlsx";
 import brandModel from "../brands/brand.model";
 import mongoose from "mongoose";
+import { getRoleFilter } from "../../utils/roleFilteration";
 
 
 
@@ -265,9 +266,17 @@ export const getProductItems = async (c: Context) => {
     const page = parseInt(c.req.query("page") || "1");
     const limit = parseInt(c.req.query("limit") || "10");
 
-    // ✅ All filters optional
+    // ✅ ROLE FILTER (unchanged function)
+    let roleFilter: any = getRoleFilter(c, "adminId");
+
+    // ✅ FIX HERE (convert if exists)
+    if (roleFilter.adminId && mongoose.Types.ObjectId.isValid(roleFilter.adminId)) {
+      roleFilter.adminId = new mongoose.Types.ObjectId(roleFilter.adminId);
+    }
+
     const query: any = {
-      status: "available", // keep default filter if needed
+      ...roleFilter,
+      status: "available",
     };
 
     if (rackId) query.rackId = rackId;
@@ -305,6 +314,7 @@ export const getProductItems = async (c: Context) => {
         totalPages: Math.ceil(total / limit),
       },
     });
+
   } catch (error: any) {
     return c.json({ success: false, message: error.message }, 500);
   }
